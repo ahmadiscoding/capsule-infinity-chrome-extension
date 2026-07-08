@@ -1133,7 +1133,8 @@ console.warn = function(...args) {
       $('#capsuleModal').classList.remove('open');
       renderAll();
     } catch (err) {
-      showToast('Failed to save: ' + err.message, 'error');
+      console.error("Supabase Save Error:", err);
+      showToast("Database Save Failed: " + err.message, "error");
     } finally {
       btn.disabled = false;
       btn.textContent = 'Save Capsule';

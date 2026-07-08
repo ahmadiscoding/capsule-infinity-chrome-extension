@@ -566,12 +566,17 @@ console.warn = function(...args) {
           metadata: { sourceUrl: r.url },
         };
         try { if (API) await API.createCapsule(capsule); } catch {}
-        await Storage.saveCapsule(capsule);
-        showToast('Page captured!', 'success');
-        loadDashboardData();
+        try {
+          await Storage.saveCapsule(capsule);
+          showToast('Page captured!', 'success');
+          loadDashboardData();
+        } catch (dbErr) {
+          console.error("Supabase Save Error:", dbErr);
+          showToast(dbErr.message || 'Database Save Failed', 'error');
+        }
       }
     } catch (err) {
-      showToast('Cannot capture this page', 'error');
+      showToast('Cannot capture this page: ' + err.message, 'error');
     }
   });
 
@@ -587,9 +592,14 @@ console.warn = function(...args) {
       updatedAt: Date.now(),
     };
     try { if (API) await API.createCapsule(capsule); } catch {}
-    await Storage.saveCapsule(capsule);
-    showToast('Capsule created!', 'success');
-    loadDashboardData();
+    try {
+      await Storage.saveCapsule(capsule);
+      showToast('Capsule created!', 'success');
+      loadDashboardData();
+    } catch (dbErr) {
+      console.error("Supabase Save Error:", dbErr);
+      showToast(dbErr.message || 'Database Save Failed', 'error');
+    }
   });
 
   $('#qaNewFolder').addEventListener('click', async () => {
