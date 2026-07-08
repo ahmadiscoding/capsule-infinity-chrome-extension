@@ -96,7 +96,7 @@ Choose your preferred installation method:
 2. Go to **`chrome://extensions/`** or **`brave://extensions/`** in your browser.
 3. Toggle the **Developer mode** switch in the top-right corner to **ON**.
 4. Click the **Load unpacked** button in the top-left corner.
-5. Select the repository root folder containing `manifest.json`.
+5. Select the unzipped folder containing `manifest.json`.
 
 ---
 
