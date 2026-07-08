@@ -844,7 +844,16 @@
       });
     }
 
+    function isContextValid() {
+      return typeof chrome !== 'undefined' && typeof chrome.runtime !== 'undefined' && !!chrome.runtime.id;
+    }
+
     async function doSave() {
+      if (!isContextValid()) {
+        showToast("Extension updated in the background. Please refresh this webpage to continue saving!", "warning");
+        return null;
+      }
+
       const title = overlay.querySelector('#ci-cap-title').value.trim() || 'Untitled';
       const content = overlay.querySelector('#ci-cap-content').value.trim();
       if (!content) { showToast('Content is required', 'error'); return null; }
