@@ -2,6 +2,14 @@
 // Capsule Infinity - Sidebar Logic
 // ============================================
 
+const originalWarn = console.warn;
+console.warn = function(...args) {
+  if (args[0] && typeof args[0] === 'string' && args[0].includes('Multiple GoTrueClient instances detected')) {
+    return;
+  }
+  originalWarn.apply(console, args);
+};
+
 (function () {
   'use strict';
 

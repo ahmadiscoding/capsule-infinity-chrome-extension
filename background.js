@@ -2,6 +2,14 @@
 // Capsule Infinity - Background Service Worker
 // ============================================
 
+const originalWarn = console.warn;
+console.warn = function(...args) {
+  if (args[0] && typeof args[0] === 'string' && args[0].includes('Multiple GoTrueClient instances detected')) {
+    return;
+  }
+  originalWarn.apply(console, args);
+};
+
 importScripts('lib/supabase-js.js');
 
 let supabaseClient = null;
@@ -150,13 +158,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const sb = await getSupabaseClient();
         if (sb) {
           try {
-            const { data: { user }, error: userError } = await sb.auth.getUser();
-            if (userError) throw userError;
-            if (!user) throw new Error('No authenticated user session found');
+            let userId = null;
+            try {
+              const { data: { user }, error: userError } = await sb.auth.getUser();
+              if (!userError && user?.id) {
+                userId = user.id;
+              }
+            } catch (authErr) {
+              console.warn('[Background] Supabase getUser failed, trying fallback:', authErr);
+            }
+
+            if (!userId) {
+              const localUser = await chrome.storage.local.get(['user']);
+              if (localUser?.user?.id) {
+                userId = localUser.user.id;
+              }
+            }
+
+            if (!userId) throw new Error('No user session found for database sync');
             
             const dbObj = {
               id: uuid,
-              user_id: user.id, // Explicit user_id column complying with RLS
+              user_id: userId, // Explicit user_id column complying with RLS or fallback ID
               title: capsule.title || 'Untitled',
               content: JSON.stringify({
                 content: capsule.content || '',
