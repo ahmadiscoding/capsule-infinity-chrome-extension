@@ -314,232 +314,15 @@ console.warn = function(...args) {
         showDashboard(response.user);
       }
     } catch (err) {
-      console.warn('[Google Auth Error] Background trigger failed, using chooser fallback:', err);
-      showToast(`Google Sign-in failed: ${err.message}`, 'error');
-      // Fallback: If client_id is not set or OAuth fails, show custom account chooser
-      showGoogleAccountChooser(
-        async (account) => {
-          const email = account.email;
-          const name = account.name;
-          let user = null;
-          try {
-            if (Storage && Storage.upsertCloudUser) {
-              user = await Storage.upsertCloudUser(email, name);
-            }
-          } catch (dbErr) {
-            console.warn('[Google Auth Fallback] Supabase registration skipped/failed:', dbErr);
-          }
-          if (!user) {
-            const id = 'g_' + email.replace(/[^a-zA-Z0-9]/g, '_');
-            user = { id, email, name, createdAt: Date.now() };
-          }
-          await chrome.storage.local.set({ user, googleAuth: true });
-          showToast('Signed in via Profile Fallback', 'success');
-          showDashboard(user);
-        },
-        () => {
-          showToast('Google Sign-in cancelled', 'info');
-        }
-      );
+      console.error('[Google Auth Error] Sign-in failed:', err);
+      showToast(`Google Sign-in failed: ${err.message || 'Please check your connection or try again.'}`, 'error');
+      showScreen(loginScreen);
     } finally {
       if (btn) {
         btn.disabled = false;
         btn.textContent = orgText;
       }
     }
-  }
-
-  function showGoogleAccountChooser(onSelect, onCancel) {
-    chrome.storage.local.get(['googleAccounts', 'user'], async (res) => {
-      let accounts = res.googleAccounts || [];
-      
-      // Try to get current Chrome profile email to pre-populate
-      try {
-        if (chrome.identity && chrome.identity.getProfileUserInfo) {
-          const profile = await chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' });
-          if (profile && profile.email) {
-            if (!accounts.some(a => a.email === profile.email)) {
-              accounts.push({
-                email: profile.email,
-                name: profile.email.split('@')[0],
-                avatar: (profile.email[0] || 'G').toUpperCase()
-              });
-            }
-          }
-        }
-      } catch (e) {}
-
-      // If still empty, add a default placeholder
-      if (accounts.length === 0) {
-        accounts.push({
-          email: 'user@gmail.com',
-          name: 'Google User',
-          avatar: 'U'
-        });
-      }
-
-      // Remove existing
-      document.getElementById('googleChooserModal')?.remove();
-
-      const modal = document.createElement('div');
-      modal.id = 'googleChooserModal';
-      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;';
-      
-      modal.innerHTML = `
-        <div style="background:#ffffff;color:#202124;border-radius:8px;padding:32px 40px;width:360px;box-shadow:0 4px 16px rgba(0,0,0,0.2);box-sizing:border-box;">
-          <div style="text-align:center;margin-bottom:24px;">
-            <svg width="24" height="24" viewBox="0 0 24 24" style="margin-bottom:16px;">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            <h1 style="font-size:22px;font-weight:400;margin:0 0 8px 0;color:#202124;line-height:1.3;">Choose an account</h1>
-            <p style="font-size:14px;color:#5f6368;margin:0;">to continue to <span style="font-weight:500;color:#1a73e8;">Capsule Infinity</span></p>
-          </div>
-
-          <div id="googleAccountsList" style="max-height:220px;overflow-y:auto;margin-bottom:16px;border-bottom:1px solid #dadce0;">
-            ${accounts.map((acc, index) => `
-              <div class="google-acc-item" data-index="${index}" style="display:flex;align-items:center;padding:12px 0;cursor:pointer;border-top:1px solid #dadce0;transition:background 0.2s;">
-                <div style="width:32px;height:32px;border-radius:50%;background:#e8f0fe;color:#1a73e8;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;margin-right:12px;">
-                  ${acc.avatar}
-                </div>
-                <div style="flex-grow:1;text-align:left;">
-                  <div style="font-size:14px;font-weight:500;color:#3c4043;line-height:1.2;">${escHtml(acc.name)}</div>
-                  <div style="font-size:12px;color:#5f6368;">${escHtml(acc.email)}</div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-
-          <div id="googleUseAnother" style="display:flex;align-items:center;padding:12px 0;cursor:pointer;color:#1a73e8;font-size:14px;font-weight:500;">
-            <span style="font-size:18px;margin-right:16px;margin-left:8px;">👤</span>
-            Use another account
-          </div>
-
-          <div style="font-size:12px;color:#5f6368;line-height:1.4;margin-top:24px;text-align:left;border-top:1px solid #dadce0;padding-top:16px;">
-            To continue, Google will share your name, email address, and profile picture with Capsule Infinity.
-          </div>
-
-          <div style="margin-top:24px;display:flex;justify-content:flex-end;">
-            <button id="googleChooserCancel" style="background:none;border:none;color:#1a73e8;font-size:14px;font-weight:500;cursor:pointer;padding:8px 16px;border-radius:4px;outline:none;">Cancel</button>
-          </div>
-        </div>
-      `;
-
-      document.body.appendChild(modal);
-
-      // Styles for hover
-      const style = document.createElement('style');
-      style.innerHTML = `
-        .google-acc-item:hover { background: #f8f9fa; }
-        #googleUseAnother:hover { color: #1557b0; }
-        #googleChooserCancel:hover { background: #f8f9fa; }
-      `;
-      modal.appendChild(style);
-
-      // Handle Cancel
-      modal.querySelector('#googleChooserCancel').onclick = () => {
-        modal.remove();
-        onCancel();
-      };
-
-      // Handle Select
-      modal.querySelectorAll('.google-acc-item').forEach(item => {
-        item.onclick = () => {
-          const index = parseInt(item.dataset.index, 10);
-          modal.remove();
-          onSelect(accounts[index]);
-        };
-      });
-
-      // Handle Use Another
-      modal.querySelector('#googleUseAnother').onclick = () => {
-        modal.remove();
-        showGoogleCustomLogin(onSelect, onCancel);
-      };
-    });
-  }
-
-  function showGoogleCustomLogin(onSelect, onCancel) {
-    const modal = document.createElement('div');
-    modal.id = 'googleChooserModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
-    
-    modal.innerHTML = `
-      <div style="background:#ffffff;color:#202124;border-radius:8px;padding:32px 40px;width:360px;box-shadow:0 4px 16px rgba(0,0,0,0.2);box-sizing:border-box;text-align:left;">
-        <div style="text-align:center;margin-bottom:24px;">
-          <svg width="24" height="24" viewBox="0 0 24 24" style="margin-bottom:16px;">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          <h1 style="font-size:22px;font-weight:400;margin:0 0 8px 0;color:#202124;">Sign in with Google</h1>
-          <p style="font-size:14px;color:#5f6368;margin:0;">to continue to Capsule Infinity</p>
-        </div>
-
-        <div id="googleLoginError" style="background:#fce8e6;color:#c5221f;font-size:12px;padding:8px 12px;border-radius:4px;margin-bottom:16px;display:none;"></div>
-
-        <div style="margin-bottom:16px;">
-          <input type="email" id="googleCustomEmail" placeholder="Email or phone" style="width:100%;padding:14px 12px;border:1px solid #dadce0;border-radius:4px;font-size:16px;outline:none;box-sizing:border-box;">
-        </div>
-        <div style="margin-bottom:24px;">
-          <input type="text" id="googleCustomName" placeholder="First Name" style="width:100%;padding:14px 12px;border:1px solid #dadce0;border-radius:4px;font-size:16px;outline:none;box-sizing:border-box;">
-        </div>
-
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span id="googleLoginBack" style="color:#1a73e8;font-size:14px;font-weight:500;cursor:pointer;">Back</span>
-          <button id="googleLoginNext" style="background:#1a73e8;color:#ffffff;border:none;padding:10px 24px;border-radius:4px;font-size:14px;font-weight:500;cursor:pointer;outline:none;">Next</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const backBtn = modal.querySelector('#googleLoginBack');
-    const nextBtn = modal.querySelector('#googleLoginNext');
-    const emailInput = modal.querySelector('#googleCustomEmail');
-    const nameInput = modal.querySelector('#googleCustomName');
-    const errDiv = modal.querySelector('#googleLoginError');
-
-    setTimeout(() => emailInput.focus(), 100);
-
-    backBtn.onclick = () => {
-      modal.remove();
-      showGoogleAccountChooser(onSelect, onCancel);
-    };
-
-    nextBtn.onclick = async () => {
-      const email = emailInput.value.trim();
-      const name = nameInput.value.trim();
-      if (!email || !email.includes('@')) {
-        errDiv.textContent = 'Enter a valid email address';
-        errDiv.style.display = 'block';
-        return;
-      }
-      if (!name) {
-        errDiv.textContent = 'Enter your first name';
-        errDiv.style.display = 'block';
-        return;
-      }
-
-      modal.remove();
-
-      // Save to googleAccounts list
-      const res = await chrome.storage.local.get('googleAccounts');
-      const accounts = res.googleAccounts || [];
-      if (!accounts.some(a => a.email === email)) {
-        accounts.push({
-          email,
-          name,
-          avatar: (name[0] || email[0] || 'G').toUpperCase()
-        });
-        await chrome.storage.local.set({ googleAccounts: accounts });
-      }
-
-      onSelect({ email, name });
-    };
   }
 
   $('#googleLoginBtn').addEventListener('click', handleGoogleAuth);
@@ -580,7 +363,18 @@ console.warn = function(...args) {
         });
       }
       if (API) await API.clearAuth();
-      await chrome.storage.local.remove(['authToken', 'user', 'googleAuth', 'lastSync']);
+      if (Storage) {
+        try {
+          const sb = await Storage.initSupabase();
+          if (sb) {
+            await sb.auth.signOut();
+          }
+        } catch (e) {
+          console.warn('[Popup Logout] Supabase signOut error:', e);
+        }
+      }
+      globalThis.supabaseInstance = null;
+      await chrome.storage.local.remove(['authToken', 'user', 'googleAuth', 'lastSync', 'supabaseSession']);
       showToast('Signed out', 'info');
       setTimeout(() => location.reload(), 300);
     } catch (err) {

@@ -394,6 +394,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const { token } = message;
       (async () => {
         try {
+          if (supabaseClient) {
+            try {
+              await supabaseClient.auth.signOut();
+            } catch (e) {
+              console.warn('[Background Logout] error signing out of Supabase:', e);
+            }
+            supabaseClient = null;
+            globalThis.supabaseInstance = null;
+          }
+          await chrome.storage.local.remove(['supabaseSession']);
+
           if (chrome.identity && chrome.identity.removeCachedAuthToken) {
             const tokenToClear = token || (await chrome.storage.local.get('authToken')).authToken;
             if (tokenToClear) {
