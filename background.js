@@ -193,13 +193,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         try {
           const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'googleClientId']);
+          const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
+          const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
+          
           let token = null;
           let refreshToken = null;
           let userObj = null;
 
-          if (res.supabaseUrl && res.supabaseKey) {
+          const url = res.supabaseUrl || defaultUrl;
+          const key = res.supabaseKey || defaultKey;
+
+          if (url && key) {
             // Sanitize Supabase URL (strip trailing slashes, ensure protocol is present)
-            let cleanUrl = res.supabaseUrl.trim().replace(/\/+$/, '');
+            let cleanUrl = url.trim().replace(/\/+$/, '');
             if (cleanUrl.includes('saqruqtjinuslcxryuc') && !cleanUrl.includes('saqruqtjjinuslcxryuc')) {
               cleanUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
               await chrome.storage.local.set({ supabaseUrl: cleanUrl });
@@ -209,7 +215,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               cleanUrl = 'https://' + cleanUrl;
             }
 
-            const sb = supabase.createClient(cleanUrl, res.supabaseKey);
+            const sb = supabase.createClient(cleanUrl, key);
             const redirectUrl = chrome.identity.getRedirectURL();
 
             // Initiate Supabase OAuth to get the raw authorization URL

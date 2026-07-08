@@ -265,6 +265,9 @@
       if (data?.token) {
         showToast('Account created!', 'success');
         showDashboard(data.user);
+      } else if (data?.confirmationSent) {
+        showToast('Verification email sent! Check your inbox.', 'success');
+        $('#showLogin').click();
       } else {
         showLoginError(data?.error || 'Registration failed');
       }
