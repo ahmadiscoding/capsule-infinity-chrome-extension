@@ -323,6 +323,9 @@
       btn.innerHTML = '<div class="spinner"></div>';
     }
 
+    let authSuccess = false;
+    let userObj = null;
+
     try {
       const response = await new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({ type: 'TRIGGER_GOOGLE_AUTH' }, (res) => {
@@ -337,9 +340,8 @@
       });
 
       if (response && response.success) {
-        showToast(`Welcome, ${response.user.name || 'User'}!`, 'success');
-        showScreen('app');
-        await loadAllData();
+        authSuccess = true;
+        userObj = response.user;
       }
     } catch (err) {
       console.warn('[Google Auth Error] Background trigger failed, using chooser fallback:', err);
@@ -363,14 +365,29 @@
           }
           await chrome.storage.local.set({ user, googleAuth: true });
           showToast('Signed in via Profile Fallback', 'success');
-          showScreen('app');
-          await loadAllData();
+          try {
+            showScreen('app');
+            await loadAllData();
+          } catch (renderErr) {
+            console.error('[Google Auth Fallback UI Render] Failed to load dashboard after success:', renderErr);
+          }
         },
         () => {
           showToast('Google Sign-in cancelled', 'info');
         }
       );
-    } finally {
+    }
+
+    if (authSuccess && userObj) {
+      try {
+        showToast(`Welcome, ${userObj.name || 'User'}!`, 'success');
+        showScreen('app');
+        await loadAllData();
+      } catch (renderErr) {
+        console.error('[Google Auth UI Render] Failed to load dashboard after success:', renderErr);
+      }
+    }
+  } finally {
       if (btn) {
         btn.disabled = false;
         btn.textContent = orgText;
@@ -907,6 +924,8 @@
   // ---- Render Teams ----
   function renderTeams() {
     const container = $('#teamsList');
+    if (!container) return; // Exit gracefully if the element is not in the DOM
+    
     if (state.teams.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
