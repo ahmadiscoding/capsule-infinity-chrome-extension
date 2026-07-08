@@ -119,8 +119,9 @@ Choose your preferred installation method:
 
 * **Milestone 1: Core Performance (Completed)**: Scraper engine, chunked save queue, timeout guards.
 * **Milestone 2: Cloud Sync (Completed)**: Supabase sync integration, Google Account PKCE auth, local cache fallback.
-* **Milestone 3: Workspace Collaboration (In Progress)**: Team workspaces list, OTP dynamic dynamic invite codes.
-* **Milestone 4: Offline Sync Queue (Future)**: Persistent sync queue, mobile browser compilation.
+* **Milestone 3: Workspace Collaboration (Planned / Upcoming)**: Multi-user organization team workspaces list, automated Supabase team schema migrations, and secure OTP/Invite key credentials exchange framework for cross-organization synchronization.
+* **Milestone 4: Mobile Expansion (Planned / Future)**: Dedicated iOS and Android mobile apps alongside mobile browser extensions support to seamlessly carry capsules and prompt context across desktop and mobile devices.
+* **Milestone 5: LLM Ecosystem & Chatbot Expansion**: Native support for the "Big 4" generative AI interfaces (ChatGPT, Claude, Gemini, and DeepSeek) with plans to expand scraper inject engines to additional enterprise chatbot platforms and open-source model interfaces (e.g., Hugging Face, OpenWebUI, LibreChat).
 
 ---
 

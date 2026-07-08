@@ -1387,11 +1387,11 @@
   // TEAM MODALS
   // =============================================
   // Create Team
-  $('#btnCreateTeam').addEventListener('click', () => $('#createTeamModal').classList.add('open'));
-  $('#createTeamModalClose').addEventListener('click', () => $('#createTeamModal').classList.remove('open'));
-  $('#createTeamCancel').addEventListener('click', () => $('#createTeamModal').classList.remove('open'));
+  $('#btnCreateTeam')?.addEventListener('click', () => $('#createTeamModal').classList.add('open'));
+  $('#createTeamModalClose')?.addEventListener('click', () => $('#createTeamModal').classList.remove('open'));
+  $('#createTeamCancel')?.addEventListener('click', () => $('#createTeamModal').classList.remove('open'));
 
-  $('#createTeamSave').addEventListener('click', async () => {
+  $('#createTeamSave')?.addEventListener('click', async () => {
     const name = $('#newTeamName').value.trim();
     const description = $('#newTeamDesc').value.trim();
     if (!name) { showToast('Team name is required', 'error'); return; }
@@ -1443,9 +1443,9 @@
   });
 
   // Join Team
-  $('#btnJoinTeam').addEventListener('click', () => $('#joinTeamModal').classList.add('open'));
-  $('#joinTeamModalClose').addEventListener('click', () => $('#joinTeamModal').classList.remove('open'));
-  $('#joinTeamCancel').addEventListener('click', () => $('#joinTeamModal').classList.remove('open'));
+  $('#btnJoinTeam')?.addEventListener('click', () => $('#joinTeamModal').classList.add('open'));
+  $('#joinTeamModalClose')?.addEventListener('click', () => $('#joinTeamModal').classList.remove('open'));
+  $('#joinTeamCancel')?.addEventListener('click', () => $('#joinTeamModal').classList.remove('open'));
 
   $('#joinTeamSubmit').addEventListener('click', async () => {
     const inviteCode = $('#joinTeamCode').value.trim();
