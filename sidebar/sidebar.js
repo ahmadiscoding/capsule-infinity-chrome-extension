@@ -17,12 +17,14 @@ console.warn = function(...args) {
   const Storage = window.CapsuleStorage;
   const Utils = window.CapsuleUtils;
 
-  // Auth state change listener from background script
+  // Auth state change and UI refresh listener
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'AUTH_SUCCESS') {
       const user = message.user;
       showToast(`Welcome, ${user.name || 'User'}!`, 'success');
       showScreen('app');
+      loadAllData();
+    } else if (message.action === 'REFRESH_CAPSULES_UI') {
       loadAllData();
     }
   });
@@ -1114,7 +1116,10 @@ console.warn = function(...args) {
         try { if (API) await API.updateCapsule(editId, updateData); } catch {}
         const capsule = state.capsules.find(c => c.id === editId);
         if (capsule) Object.assign(capsule, updateData);
-        await Storage.saveCapsule({ ...capsule, ...updateData });
+        const saved = await Storage.saveCapsule({ ...capsule, ...updateData });
+        const idx = state.capsules.findIndex(c => c.id === saved.id);
+        if (idx >= 0) state.capsules[idx] = saved;
+        await chrome.storage.local.set({ capsules: state.capsules });
         showToast('Capsule updated!', 'success');
       } else {
         // Create new
@@ -1125,13 +1130,15 @@ console.warn = function(...args) {
           updatedAt: Date.now(),
         };
         try { if (API) await API.createCapsule(newCapsule); } catch {}
-        await Storage.saveCapsule(newCapsule);
-        state.capsules.unshift(newCapsule);
+        const saved = await Storage.saveCapsule(newCapsule);
+        state.capsules.unshift(saved);
+        await chrome.storage.local.set({ capsules: state.capsules });
         showToast('Capsule created!', 'success');
       }
 
       $('#capsuleModal').classList.remove('open');
       renderAll();
+      chrome.runtime.sendMessage({ action: "REFRESH_CAPSULES_UI" });
     } catch (err) {
       console.error("Supabase Save Error:", err);
       showToast("Database Save Failed: " + err.message, "error");

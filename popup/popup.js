@@ -17,12 +17,14 @@ console.warn = function(...args) {
   const Storage = window.CapsuleStorage;
   const Utils = window.CapsuleUtils;
 
-  // Auth state change listener from background script
+  // Auth state change and UI refresh listener
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'AUTH_SUCCESS') {
       const user = message.user;
       showToast(`Welcome, ${user.name || 'User'}!`, 'success');
       showDashboard(user);
+    } else if (message.action === 'REFRESH_CAPSULES_UI') {
+      loadDashboardData();
     }
   });
 
@@ -567,9 +569,16 @@ console.warn = function(...args) {
         };
         try { if (API) await API.createCapsule(capsule); } catch {}
         try {
-          await Storage.saveCapsule(capsule);
+          const saved = await Storage.saveCapsule(capsule);
+          const res = await chrome.storage.local.get(['capsules']);
+          let capsList = res.capsules || [];
+          const idx = capsList.findIndex(c => c.id === saved.id);
+          if (idx >= 0) capsList[idx] = saved;
+          else capsList.unshift(saved);
+          await chrome.storage.local.set({ capsules: capsList });
           showToast('Page captured!', 'success');
           loadDashboardData();
+          chrome.runtime.sendMessage({ action: "REFRESH_CAPSULES_UI" });
         } catch (dbErr) {
           console.error("Supabase Save Error:", dbErr);
           showToast(dbErr.message || 'Database Save Failed', 'error');
@@ -593,9 +602,16 @@ console.warn = function(...args) {
     };
     try { if (API) await API.createCapsule(capsule); } catch {}
     try {
-      await Storage.saveCapsule(capsule);
+      const saved = await Storage.saveCapsule(capsule);
+      const res = await chrome.storage.local.get(['capsules']);
+      let capsList = res.capsules || [];
+      const idx = capsList.findIndex(c => c.id === saved.id);
+      if (idx >= 0) capsList[idx] = saved;
+      else capsList.unshift(saved);
+      await chrome.storage.local.set({ capsules: capsList });
       showToast('Capsule created!', 'success');
       loadDashboardData();
+      chrome.runtime.sendMessage({ action: "REFRESH_CAPSULES_UI" });
     } catch (dbErr) {
       console.error("Supabase Save Error:", dbErr);
       showToast(dbErr.message || 'Database Save Failed', 'error');
