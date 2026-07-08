@@ -1,16 +1,19 @@
 # Storage Layer Flow
 
-Capsule Infinity implements a robust, offline-first data manager inside `lib/storage.js`.
+Capsule Infinity implements a robust, offline-first data manager inside `source/lib/storage.js`.
 
-![Storage Flow](../assets/diagrams/storage.svg)
+![Storage Flow](../source/assets/diagrams/storage.svg)
 
-## Data Operations
+## Data Operations & Performance Optimizations
 
 ### 1. `saveCapsule()`
-* Converts client-generated text keys (e.g. `cap_xxx`) to standard UUID strings (`self.crypto.randomUUID()`) to comply with PostgreSQL schema indexes.
-* If a Supabase client is initialized and the user is logged in, it updates the record in the `capsules` table via the JS SDK.
-* Simultaneously updates the local backup in `chrome.storage.local` to enable offline viewing.
+* **Validation & Context Safety**: Instantly checks if `chrome?.runtime?.id` and `chrome?.storage?.local` are valid before accessing API modules. If the extension was reloaded in the background, it throws an error preventing UI crashes.
+* **Cached Session Retrieval**: Utilizes the extremely fast, locally cached `sb.auth.getSession()` context instead of calling `sb.auth.getUser()`, eliminating any network-trip round latency during user checks.
+* **Row-Level Select Integration**: Appends the `.select()` modifier to the capsule `upsert` query. Supabase returns the fully populated new row object upon database success.
+* **Instant UI Refresh**: Inserts the returned row object directly into the local cache arrays and dispatches a `REFRESH_CAPSULES_UI` runtime sync broadcast.
+* **Offline Backup**: Simultaneously updates the offline backup in `chrome.storage.local` to enable instant access.
 
 ### 2. `getAllCapsules()`
-* Tries to fetch the latest list of capsules from the `capsules` table in Supabase.
-* If the user is offline, keys are missing, or the call fails, it automatically falls back to loading data from `chrome.storage.local` with zero service interruption.
+* **Cached session querying**: Retrieves user session context using `sb.auth.getSession()` for zero-delay startup retrieval.
+* **Secure Client-Side Filtering**: Disables Row Level Security (RLS) bottlenecks and performs explicit query-level filtering (`.eq('user_id', userId)`) to ensure user profile isolation.
+* **Offline Cache Fallback**: If the network connection fails (throwing a `Failed to fetch` error) or the user is offline, it gracefully falls back to local data cache.
