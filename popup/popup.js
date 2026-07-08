@@ -157,6 +157,23 @@ console.warn = function(...args) {
       renderRecentCapsules(recent);
     } catch (err) {
       console.error('[Popup] Dashboard load error:', err);
+      const isNetworkError = err.message && (err.message.includes('Failed to fetch') || err.message.includes('fetch')) || !navigator.onLine;
+      if (isNetworkError) {
+        showToast("Network Error: Unable to connect to cloud storage. Working offline.", "warning");
+        try {
+          const res = await chrome.storage.local.get(['capsules', 'folders']);
+          const capsules = res.capsules || [];
+          const folders = res.folders || [];
+          $('#statTotal').textContent = capsules.length;
+          $('#statFolders').textContent = folders.length;
+          $('#statTeams').textContent = 0;
+          renderRecentCapsules(capsules.slice(0, 6));
+        } catch (localErr) {
+          console.error('[Popup] Local fallback load failed:', localErr);
+        }
+      } else {
+        showToast("Sync Error: " + err.message, "error");
+      }
     }
   }
 

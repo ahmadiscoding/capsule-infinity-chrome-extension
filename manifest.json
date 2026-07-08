@@ -28,7 +28,8 @@
     "https://www.phind.com/*",
     "https://you.com/*",
     "https://kagi.com/*",
-    "https://www.googleapis.com/*"
+    "https://www.googleapis.com/*",
+    "https://*.supabase.co/*"
   ],
   "background": {
     "service_worker": "background.js"
