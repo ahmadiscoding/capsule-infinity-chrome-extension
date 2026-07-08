@@ -322,11 +322,11 @@
       btn.disabled = true;
       btn.innerHTML = '<div class="spinner"></div>';
     }
-
-    let authSuccess = false;
-    let userObj = null;
-
     try {
+      let authSuccess = false;
+      let userObj = null;
+
+      try {
       const response = await new Promise((resolve, reject) => {
         chrome.runtime.sendMessage({ type: 'TRIGGER_GOOGLE_AUTH' }, (res) => {
           if (chrome.runtime.lastError) {
