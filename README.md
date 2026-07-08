@@ -1,6 +1,6 @@
 # Capsule Infinity
 
-![Hero Banner](assets/banners/hero_banner.jpg)
+![Hero Banner](source/assets/banners/hero_banner.jpg)
 
 <div align="center">
   <h3>Enhance Your Browser. Extend Your World.</h3>
@@ -30,7 +30,7 @@ Brainstorming or debugging code across different model engines (e.g. migrating a
 
 ## 🛠 Features Matrix
 
-![Feature Cards](assets/banners/feature_banner.svg)
+![Feature Cards](source/assets/banners/feature_banner.svg)
 
 * **Asynchronous Chunking Pipeline**: Splits large payloads into 50KB segments to safely navigate browser messaging thresholds.
 * **Lazy-Load Scraping Engine**: Safely queries DOM structures, gracefully handling dynamic list changes.
@@ -42,7 +42,7 @@ Brainstorming or debugging code across different model engines (e.g. migrating a
 
 ## ⚡ How It Works
 
-![Workflow Diagram](assets/diagrams/workflow.svg)
+![Workflow Diagram](source/assets/diagrams/workflow.svg)
 
 1. **Capture**: Injected content scripts scrape the conversation DOM tree.
 2. **Prepend & Chunk**: Adds custom systemic prompts and splits payload into 50KB chunks.
@@ -55,7 +55,7 @@ Brainstorming or debugging code across different model engines (e.g. migrating a
 
 ### Quick Actions Popup
 
-![Popup Layout Breakdown](assets/diagrams/popup_explanation.svg)
+![Popup Layout Breakdown](source/assets/diagrams/popup_explanation.svg)
 
 * **Stats Cards**: Instantly displays saved count metrics.
 * **Quick Actions**: Triggers injected overlays on the active tab page.
@@ -68,16 +68,16 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 <div align="center">
   <table border="0">
     <tr>
-      <td><img src="assets/screenshots/Screenshot%202026-07-08%20172724.png" width="380" alt="Capsule Infinity Screenshot 1"></td>
-      <td><img src="assets/screenshots/Screenshot%202026-07-08%20172813.png" width="380" alt="Capsule Infinity Screenshot 2"></td>
+      <td><img src="source/assets/screenshots/Screenshot%202026-07-08%20172724.png" width="380" alt="Capsule Infinity Screenshot 1"></td>
+      <td><img src="source/assets/screenshots/Screenshot%202026-07-08%20172813.png" width="380" alt="Capsule Infinity Screenshot 2"></td>
     </tr>
     <tr>
-      <td><img src="assets/screenshots/Screenshot%202026-07-08%20172909.png" width="380" alt="Capsule Infinity Screenshot 3"></td>
-      <td><img src="assets/screenshots/Screenshot%202026-07-08%20172930.png" width="380" alt="Capsule Infinity Screenshot 4"></td>
+      <td><img src="source/assets/screenshots/Screenshot%202026-07-08%20172909.png" width="380" alt="Capsule Infinity Screenshot 3"></td>
+      <td><img src="source/assets/screenshots/Screenshot%202026-07-08%20172930.png" width="380" alt="Capsule Infinity Screenshot 4"></td>
     </tr>
     <tr>
-      <td><img src="assets/screenshots/Screenshot%202026-07-08%20172943.png" width="380" alt="Capsule Infinity Screenshot 5"></td>
-      <td><img src="assets/screenshots/Screenshot%202026-07-08%20172954.png" width="380" alt="Capsule Infinity Screenshot 6"></td>
+      <td><img src="source/assets/screenshots/Screenshot%202026-07-08%20172943.png" width="380" alt="Capsule Infinity Screenshot 5"></td>
+      <td><img src="source/assets/screenshots/Screenshot%202026-07-08%20172954.png" width="380" alt="Capsule Infinity Screenshot 6"></td>
     </tr>
   </table>
 </div>
@@ -90,19 +90,19 @@ Choose your preferred installation method:
 
 ### Method 1: Chrome / Brave (Developer Mode)
 
-![Installation Infographic](assets/infographics/installation_infographic.svg)
+![Installation Infographic](source/assets/infographics/installation_infographic.svg)
 
 1. **Download source ZIP** from this repository (or clone it: `git clone https://github.com/your-username/capsule-infinity.git`).
 2. Go to **`chrome://extensions/`** or **`brave://extensions/`** in your browser.
 3. Toggle the **Developer mode** switch in the top-right corner to **ON**.
 4. Click the **Load unpacked** button in the top-left corner.
-5. Select the unzipped folder containing `manifest.json`.
+5. Select the unzipped **`source`** folder containing `manifest.json`.
 
 ---
 
 ## 📂 Project Architecture
 
-![Component Map](assets/diagrams/component_diagram.svg)
+![Component Map](source/assets/diagrams/component_diagram.svg)
 
 * `manifest.json`: Configuration declarations.
 * `background.js`: Main MV3 background service worker, coordinates OAuth, and handles sync pools.
@@ -115,7 +115,7 @@ Choose your preferred installation method:
 
 ## 🗺 Roadmap
 
-![Roadmap Timeline](assets/diagrams/roadmap.svg)
+![Roadmap Timeline](source/assets/diagrams/roadmap.svg)
 
 * **Milestone 1: Core Performance (Completed)**: Scraper engine, chunked save queue, timeout guards.
 * **Milestone 2: Cloud Sync (Completed)**: Supabase sync integration, Google Account PKCE auth, local cache fallback.
