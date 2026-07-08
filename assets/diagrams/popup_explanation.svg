@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="800" height="500" fill="#0b0b14"/>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="400" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">POPUP PANEL BREAKDOWN</text>
+  <text x="400" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Visual elements of the extension popup layout</text>
+
+  <!-- Central Graphic Simulation of the popup interface -->
+  <g transform="translate(100, 100)">
+    <rect width="240" height="340" rx="8" fill="#131322" stroke="rgba(255,255,255,0.06)" />
+    
+    <!-- Header -->
+    <rect x="0" y="0" width="240" height="40" rx="8" fill="rgba(255,255,255,0.02)" />
+    <text x="15" y="24" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="700">Capsule Infinity</text>
+    <circle cx="220" cy="20" r="6" fill="#8b5cf6" />
+    
+    <!-- Stats Cards -->
+    <rect x="15" y="55" width="60" height="40" rx="4" fill="#1c1c34" />
+    <text x="45" y="72" text-anchor="middle" fill="#3b82f6" font-family="system-ui, sans-serif" font-size="10" font-weight="800">12</text>
+    <text x="45" y="87" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="7">Capsules</text>
+
+    <rect x="90" y="55" width="60" height="40" rx="4" fill="#1c1c34" />
+    <text x="120" y="72" text-anchor="middle" fill="#ec4899" font-family="system-ui, sans-serif" font-size="10" font-weight="800">5</text>
+    <text x="120" y="87" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="7">Folders</text>
+
+    <rect x="165" y="55" width="60" height="40" rx="4" fill="#1c1c34" />
+    <text x="195" y="72" text-anchor="middle" fill="#10b981" font-family="system-ui, sans-serif" font-size="10" font-weight="800">2</text>
+    <text x="195" y="87" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="7">Teams</text>
+
+    <!-- Quick Actions -->
+    <rect x="15" y="110" width="210" height="30" rx="4" fill="rgba(255,255,255,0.03)" />
+    <text x="25" y="128" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="9" font-weight="600">✨ Capture Active Tab Page</text>
+
+    <!-- Recent List -->
+    <text x="15" y="165" fill="#64748b" font-family="system-ui, sans-serif" font-size="9" font-weight="700">RECENT CAPSULES</text>
+    <rect x="15" y="180" width="210" height="35" rx="4" fill="#1c1c34" />
+    <text x="25" y="201" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="9">Getting Started with Supabase</text>
+
+    <rect x="15" y="225" width="210" height="35" rx="4" fill="#1c1c34" />
+    <text x="25" y="246" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="9">Chrome Extension Lifecycles</text>
+  </g>
+
+  <!-- Descriptions -->
+  <g transform="translate(420, 100)" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8">
+    <text x="0" y="40" fill="#e2e8f0" font-weight="700">Stats Grid</text>
+    <text x="0" y="60">Shows total count of saved capsules, folders,</text>
+    <text x="0" y="75">and collaborative user teams sync states.</text>
+
+    <text x="0" y="120" fill="#e2e8f0" font-weight="700">Quick Actions Bar</text>
+    <text x="0" y="140">One-click triggers to inject the capture overlays</text>
+    <text x="0" y="155">directly into your current page DOM.</text>
+
+    <text x="0" y="200" fill="#e2e8f0" font-weight="700">Recent List</text>
+    <text x="0" y="220">Quick access checklist of your 6 most recently</text>
+    <text x="0" y="235">captured capsules ready to copy or edit.</text>
+  </g>
+</svg>

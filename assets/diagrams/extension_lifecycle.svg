@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="900" height="480" fill="#0b0b14"/>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="450" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">MV3 EXTENSION LIFECYCLE</text>
+  <text x="450" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Lifecycle states of background worker, popups, and script hooks</text>
+
+  <!-- Step 1 -->
+  <g transform="translate(80, 160)">
+    <rect x="0" y="0" width="200" height="150" rx="8" fill="#131322" stroke="#3b82f6" stroke-width="1.5" />
+    <text x="100" y="30" text-anchor="middle" fill="#3b82f6" font-family="system-ui, sans-serif" font-size="13" font-weight="700">1. Setup &amp; Install</text>
+    <text x="20" y="70" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● Load Unpacked folder</text>
+    <text x="20" y="95" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● Register extension ID</text>
+    <text x="20" y="120" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● Swaps worker to default</text>
+  </g>
+
+  <!-- Step 2 -->
+  <g transform="translate(350, 160)">
+    <rect x="0" y="0" width="200" height="150" rx="8" fill="#131322" stroke="#8b5cf6" stroke-width="1.5" />
+    <text x="100" y="30" text-anchor="middle" fill="#c084fc" font-family="system-ui, sans-serif" font-size="13" font-weight="700">2. Active Injections</text>
+    <text x="20" y="70" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● CSS/JS inject hooks</text>
+    <text x="20" y="95" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● floating button render</text>
+    <text x="20" y="120" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● lazy-loaded traversal</text>
+  </g>
+
+  <!-- Step 3 -->
+  <g transform="translate(620, 160)">
+    <rect x="0" y="0" width="200" height="150" rx="8" fill="#131322" stroke="#10b981" stroke-width="1.5" />
+    <text x="100" y="30" text-anchor="middle" fill="#10b981" font-family="system-ui, sans-serif" font-size="13" font-weight="700">3. Termination State</text>
+    <text x="20" y="70" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● 8s Scrape Timeout</text>
+    <text x="20" y="95" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● Graceful UI spinner stop</text>
+    <text x="20" y="120" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● Wipes auth cache</text>
+  </g>
+
+  <!-- Connection Arrows -->
+  <path d="M 285 235 L 340 235" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrow-purple)" />
+  <path d="M 555 235 L 610 235" fill="none" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-green)" />
+
+  <defs>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#8b5cf6" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
+    </marker>
+  </defs>
+</svg>

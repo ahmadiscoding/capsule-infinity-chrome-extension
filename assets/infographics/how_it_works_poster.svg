@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="600" height="800" fill="#0b0b14"/>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="300" y="60" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="28" font-weight="900" letter-spacing="1">HOW IT WORKS</text>
+  <text x="300" y="90" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="14" font-weight="500">Core data processing lifecycle</text>
+
+  <!-- Flow chart visual representation -->
+  <g transform="translate(100, 150)">
+    <rect width="400" height="70" rx="8" fill="#131322" stroke="#3b82f6" stroke-width="1.5" />
+    <text x="200" y="32" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">1. DOM Scraper Traverses Page</text>
+    <text x="200" y="52" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="10">Resolves lazy loaded elements securely</text>
+  </g>
+
+  <line x1="300" y1="220" x2="300" y2="270" stroke="#3b82f6" stroke-width="2.5" />
+
+  <g transform="translate(100, 270)">
+    <rect width="400" height="70" rx="8" fill="#131322" stroke="#8b5cf6" stroke-width="1.5" />
+    <text x="200" y="32" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">2. Chunking Engine Activates</text>
+    <text x="200" y="52" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="10">Splits large payload text into 50KB message packets</text>
+  </g>
+
+  <line x1="300" y1="340" x2="300" y2="390" stroke="#8b5cf6" stroke-width="2.5" />
+
+  <g transform="translate(100, 390)">
+    <rect width="400" height="70" rx="8" fill="#131322" stroke="#ec4899" stroke-width="1.5" />
+    <text x="200" y="32" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">3. Background Worker Assembly</text>
+    <text x="200" y="52" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="10">Recompiles buffers and triggers database upsert</text>
+  </g>
+
+  <line x1="300" y1="460" x2="300" y2="510" stroke="#ec4899" stroke-width="2.5" />
+
+  <g transform="translate(100, 510)">
+    <rect width="400" height="70" rx="8" fill="#131322" stroke="#10b981" stroke-width="1.5" />
+    <text x="200" y="32" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">4. Supabase DB RLS Synced</text>
+    <text x="200" y="52" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="10">Secure upsert transactions with UUID conversions</text>
+  </g>
+</svg>

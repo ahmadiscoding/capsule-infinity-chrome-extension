@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="900" height="480" fill="#0b0b14"/>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="450" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">OFFLINE-FIRST STORAGE DECISION TREE</text>
+  <text x="450" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">How Capsule Infinity routes saving operations dynamically</text>
+
+  <!-- Decision Box -->
+  <g transform="translate(325, 120)">
+    <rect x="0" y="0" width="250" height="70" rx="8" fill="#131322" stroke="#8b5cf6" stroke-width="2" />
+    <text x="125" y="32" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="700">Is Supabase configured &amp;</text>
+    <text x="125" y="48" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="700">user logged in online?</text>
+  </g>
+
+  <!-- True branch -->
+  <g transform="translate(100, 260)">
+    <rect x="0" y="0" width="280" height="120" rx="8" fill="#131322" stroke="#10b981" stroke-width="1.5" />
+    <rect x="0" y="0" width="280" height="30" rx="8" fill="rgba(16, 185, 129, 0.1)" />
+    <text x="140" y="20" text-anchor="middle" fill="#10b981" font-family="system-ui, sans-serif" font-size="12" font-weight="700">YES (SUPABASE SYNC)</text>
+    <text x="20" y="55" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">1. Convert local ID to UUID mapping</text>
+    <text x="20" y="75" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">2. Upsert to public.capsules table</text>
+    <text x="20" y="95" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">3. Write clean backup copy to local cache</text>
+  </g>
+
+  <!-- False branch -->
+  <g transform="translate(520, 260)">
+    <rect x="0" y="0" width="280" height="120" rx="8" fill="#131322" stroke="#f59e0b" stroke-width="1.5" />
+    <rect x="0" y="0" width="280" height="30" rx="8" fill="rgba(245, 158, 11, 0.1)" />
+    <text x="140" y="20" text-anchor="middle" fill="#f59e0b" font-family="system-ui, sans-serif" font-size="12" font-weight="700">NO (OFFLINE LOCAL FALLBACK)</text>
+    <text x="20" y="55" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">1. Preserve local storage structure</text>
+    <text x="20" y="75" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">2. Store directly in chrome.storage.local</text>
+    <text x="20" y="95" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">3. Background worker syncs when online</text>
+  </g>
+
+  <!-- Connections -->
+  <line x1="450" y1="190" x2="240" y2="260" stroke="#4b5563" stroke-width="2" />
+  <text x="320" y="220" fill="#10b981" font-family="system-ui, sans-serif" font-size="11" font-weight="700">True</text>
+  
+  <line x1="450" y1="190" x2="660" y2="260" stroke="#4b5563" stroke-width="2" />
+  <text x="560" y="220" fill="#ef4444" font-family="system-ui, sans-serif" font-size="11" font-weight="700">False</text>
+</svg>

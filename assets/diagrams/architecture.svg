@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 550" width="100%" height="100%">
+  <!-- Definitions for gradients/glows -->
+  <defs>
+    <rect id="bg" width="900" height="550" fill="#0b0b14"/>
+    <linearGradient id="purple-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <linearGradient id="emerald-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10b981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="orange-pink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <use href="#bg" />
+
+  <!-- Grid Pattern Overlay -->
+  <g opacity="0.04">
+    <path d="M 0 50 L 900 50 M 0 100 L 900 100 M 0 150 L 900 150 M 0 200 L 900 200 M 0 250 L 900 250 M 0 300 L 900 300 M 0 350 L 900 350 M 0 400 L 900 400 M 0 450 L 900 450 M 0 500 L 900 500" stroke="#ffffff" stroke-width="1"/>
+    <path d="M 50 0 L 50 550 M 100 0 L 100 550 M 150 0 L 150 550 M 200 0 L 200 550 M 250 0 L 250 550 M 300 0 L 300 550 M 350 0 L 350 550 M 400 0 L 400 550 M 450 0 L 450 550 M 500 0 L 500 550 M 550 0 L 550 550 M 600 0 L 600 550 M 650 0 L 650 550 M 700 0 L 700 550 M 750 0 L 750 550 M 800 0 L 800 550 M 850 0 L 850 550" stroke="#ffffff" stroke-width="1"/>
+  </g>
+
+  <!-- Title -->
+  <text x="450" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">CAPSULE INFINITY ARCHITECTURE</text>
+  <text x="450" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Overview of the component layouts and message boundaries</text>
+
+  <!-- Content Script Layer -->
+  <g transform="translate(50, 100)">
+    <rect width="230" height="230" rx="12" fill="#131322" stroke="#3b82f6" stroke-width="1.5" />
+    <rect width="230" height="36" rx="12" fill="rgba(59, 130, 246, 0.1)" />
+    <text x="115" y="24" text-anchor="middle" fill="#3b82f6" font-family="system-ui, sans-serif" font-size="13" font-weight="700">INJECTED CONTENT SCRIPT</text>
+    
+    <!-- Inner Boxes -->
+    <rect x="15" y="55" width="200" height="42" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="80" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">DOM Scraper Engine</text>
+    <circle cx="190" cy="76" r="4" fill="#10b981" />
+
+    <rect x="15" y="110" width="200" height="42" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="135" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Injected Capture UI Overlay</text>
+    <circle cx="190" cy="131" r="4" fill="#10b981" />
+
+    <rect x="15" y="165" width="200" height="50" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="186" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="10" font-weight="600">Chunked Message Sender</text>
+    <text x="25" y="200" fill="#64748b" font-family="system-ui, sans-serif" font-size="9">(Sequenced 50KB strings)</text>
+  </g>
+
+  <!-- Background Service Worker -->
+  <g transform="translate(340, 100)">
+    <rect width="220" height="380" rx="12" fill="#131322" stroke="#8b5cf6" stroke-width="1.5" filter="url(#glow)" />
+    <rect width="220" height="36" rx="12" fill="rgba(139, 92, 246, 0.1)" />
+    <text x="110" y="24" text-anchor="middle" fill="#c084fc" font-family="system-ui, sans-serif" font-size="13" font-weight="700">MV3 BACKGROUND WORKER</text>
+
+    <!-- Inner Modules -->
+    <rect x="15" y="55" width="190" height="52" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="78" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Chunk Assembly Pool</text>
+    <text x="25" y="93" fill="#64748b" font-family="system-ui, sans-serif" font-size="9">Buffers payload fragments</text>
+
+    <rect x="15" y="120" width="190" height="52" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="143" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Supabase JS Client</text>
+    <text x="25" y="158" fill="#64748b" font-family="system-ui, sans-serif" font-size="9">Handles user &amp; table auth</text>
+
+    <rect x="15" y="185" width="190" height="52" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="208" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Identity Controller</text>
+    <text x="25" y="223" fill="#64748b" font-family="system-ui, sans-serif" font-size="9">launchWebAuthFlow (OAuth)</text>
+
+    <rect x="15" y="250" width="190" height="52" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="273" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Data Replicator Worker</text>
+    <text x="25" y="288" fill="#64748b" font-family="system-ui, sans-serif" font-size="9">Bidirectional delta sync</text>
+
+    <rect x="15" y="315" width="190" height="50" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="335" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Storage Syncer</text>
+    <text x="25" y="350" fill="#64748b" font-family="system-ui, sans-serif" font-size="9">chrome.storage.local fallback</text>
+  </g>
+
+  <!-- Sidebar & Popup Layer -->
+  <g transform="translate(50, 360)">
+    <rect width="230" height="120" rx="12" fill="#131322" stroke="#ec4899" stroke-width="1.5" />
+    <rect width="230" height="32" rx="12" fill="rgba(236, 72, 153, 0.1)" />
+    <text x="115" y="21" text-anchor="middle" fill="#f472b6" font-family="system-ui, sans-serif" font-size="12" font-weight="700">SIDEBAR &amp; POPUP PANELS</text>
+    
+    <rect x="15" y="45" width="200" height="30" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="64" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="10" font-weight="600">Library UI (popup/sidebar)</text>
+
+    <rect x="15" y="80" width="200" height="30" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="99" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="10" font-weight="600">CapsuleStorage SDK client</text>
+  </g>
+
+  <!-- Cloud Supabase Database -->
+  <g transform="translate(620, 200)">
+    <rect width="230" height="180" rx="12" fill="#131322" stroke="#10b981" stroke-width="1.5" />
+    <rect width="230" height="36" rx="12" fill="rgba(16, 185, 129, 0.1)" />
+    <text x="115" y="24" text-anchor="middle" fill="#10b981" font-family="system-ui, sans-serif" font-size="13" font-weight="700">SUPABASE CLOUD SERVICE</text>
+
+    <rect x="15" y="55" width="200" height="42" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="80" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Auth Users (Postgres Schema)</text>
+    <circle cx="190" cy="76" r="4" fill="#10b981" />
+
+    <rect x="15" y="110" width="200" height="42" rx="6" fill="#1c1c34" stroke="rgba(255,255,255,0.06)" />
+    <text x="25" y="135" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="11" font-weight="600">Capsules Table (RLS Secure)</text>
+    <circle cx="190" cy="131" r="4" fill="#10b981" />
+  </g>
+
+  <!-- Connecting Arrows -->
+  <!-- Content Script ➔ Background -->
+  <path d="M 280 215 L 330 215" fill="none" stroke="url(#purple-blue)" stroke-width="2.5" marker-end="url(#arrow)" />
+  <!-- Sidebar ➔ Background -->
+  <path d="M 280 420 L 450 420 L 450 490" fill="none" stroke="#ec4899" stroke-width="2" stroke-dasharray="4,4" />
+  <path d="M 450 490 L 450 482" fill="none" stroke="#ec4899" stroke-width="2" marker-end="url(#arrow-pink)" />
+  <!-- Background ➔ Supabase -->
+  <path d="M 560 290 L 610 290" fill="none" stroke="url(#emerald-glow)" stroke-width="2.5" marker-end="url(#arrow-green)" />
+
+  <!-- Arrow Definitions -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#3b82f6" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
+    </marker>
+    <marker id="arrow-pink" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#ec4899" />
+    </marker>
+  </defs>
+</svg>

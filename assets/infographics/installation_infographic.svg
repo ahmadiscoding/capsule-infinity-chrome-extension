@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 650" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="800" height="650" fill="#0b0b14"/>
+    <linearGradient id="purple-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="400" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">INSTALLATION PROCESS</text>
+  <text x="400" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Step-by-step developer loading guide</text>
+
+  <!-- Step 1 -->
+  <g transform="translate(100, 100)">
+    <rect width="600" height="70" rx="8" fill="#131322" stroke="rgba(255,255,255,0.05)" />
+    <circle cx="40" cy="35" r="18" fill="url(#purple-blue)" />
+    <text x="40" y="40" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="13" font-weight="800">1</text>
+    <text x="80" y="30" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Download Source ZIP</text>
+    <text x="80" y="48" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Click 'Code' -> 'Download ZIP' from the repository root and extract it.</text>
+  </g>
+
+  <!-- Step 2 -->
+  <g transform="translate(100, 190)">
+    <rect width="600" height="70" rx="8" fill="#131322" stroke="rgba(255,255,255,0.05)" />
+    <circle cx="40" cy="35" r="18" fill="url(#purple-blue)" />
+    <text x="40" y="40" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="13" font-weight="800">2</text>
+    <text x="80" y="30" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Open Extension Manager</text>
+    <text x="80" y="48" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Type chrome://extensions (or brave://extensions) in your URL bar.</text>
+  </g>
+
+  <!-- Step 3 -->
+  <g transform="translate(100, 280)">
+    <rect width="600" height="70" rx="8" fill="#131322" stroke="rgba(255,255,255,0.05)" />
+    <circle cx="40" cy="35" r="18" fill="url(#purple-blue)" />
+    <text x="40" y="40" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="13" font-weight="800">3</text>
+    <text x="80" y="30" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Enable Developer Mode</text>
+    <text x="80" y="48" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Toggle the 'Developer mode' switch in the top-right corner to ON.</text>
+  </g>
+
+  <!-- Step 4 -->
+  <g transform="translate(100, 370)">
+    <rect width="600" height="70" rx="8" fill="#131322" stroke="rgba(255,255,255,0.05)" />
+    <circle cx="40" cy="35" r="18" fill="url(#purple-blue)" />
+    <text x="40" y="40" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="13" font-weight="800">4</text>
+    <text x="80" y="30" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Click Load Unpacked</text>
+    <text x="80" y="48" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Click the 'Load unpacked' button in the top-left menu bar.</text>
+  </g>
+
+  <!-- Step 5 -->
+  <g transform="translate(100, 460)">
+    <rect width="600" height="70" rx="8" fill="#131322" stroke="rgba(255,255,255,0.05)" />
+    <circle cx="40" cy="35" r="18" fill="url(#purple-blue)" />
+    <text x="40" y="40" text-anchor="middle" fill="white" font-family="system-ui, sans-serif" font-size="13" font-weight="800">5</text>
+    <text x="80" y="30" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Select Project Folder</text>
+    <text x="80" y="48" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Choose the extracted folder containing manifest.json. You're done!</text>
+  </g>
+
+  <!-- Connective Lines -->
+  <line x1="140" y1="170" x2="140" y2="190" stroke="#3b82f6" stroke-width="2" stroke-dasharray="2,2" />
+  <line x1="140" y1="260" x2="140" y2="280" stroke="#3b82f6" stroke-width="2" stroke-dasharray="2,2" />
+  <line x1="140" y1="350" x2="140" y2="370" stroke="#3b82f6" stroke-width="2" stroke-dasharray="2,2" />
+  <line x1="140" y1="440" x2="140" y2="460" stroke="#3b82f6" stroke-width="2" stroke-dasharray="2,2" />
+</svg>

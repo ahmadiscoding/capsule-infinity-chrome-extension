@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="900" height="520" fill="#0b0b14"/>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="450" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">PROJECT DIRECTORY STRUCTURE</text>
+  <text x="450" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Logical organization of extension files and open-source documentation</text>
+
+  <!-- Left Tree Layout (Visual representation) -->
+  <g transform="translate(100, 100)" font-family="monospace" font-size="13" fill="#e2e8f0" xml:space="preserve">
+    <text x="20" y="20" fill="#facc15">capsule-infinity-chrome-extension/ &lt;root&gt;</text>
+    
+    <text x="40" y="50" fill="#a78bfa">├── .github/</text>
+    <text x="60" y="75" fill="#94a3b8">│   ├── workflows/             <tspan fill="#475569"># Automated test pipelines</tspan></text>
+    <text x="60" y="100" fill="#94a3b8">│   └── ISSUE_TEMPLATE/        <tspan fill="#475569"># Bug / Feature request templates</tspan></text>
+    
+    <text x="40" y="130" fill="#a78bfa">├── assets/</text>
+    <text x="60" y="155" fill="#94a3b8">│   ├── banners/               <tspan fill="#475569"># Social preview and banners</tspan></text>
+    <text x="60" y="180" fill="#94a3b8">│   └── diagrams/              <tspan fill="#475569"># SVG structural charts</tspan></text>
+    
+    <text x="40" y="210" fill="#a78bfa">├── content-scripts/</text>
+    <text x="60" y="235" fill="#94a3b8">│   └── generic.js             <tspan fill="#475569"># Traverses DOM and chunks text</tspan></text>
+    
+    <text x="40" y="265" fill="#a78bfa">├── docs/</text>
+    <text x="60" y="290" fill="#94a3b8">│   ├── Architecture.md        <tspan fill="#475569"># System design layout</tspan></text>
+    <text x="60" y="315" fill="#94a3b8">│   └── Development.md         <tspan fill="#475569"># Setup / Contribution details</tspan></text>
+    
+    <text x="40" y="345" fill="#a78bfa">├── lib/</text>
+    <text x="60" y="370" fill="#94a3b8">│   ├── storage.js             <tspan fill="#475569"># Supabase client wrapper &amp; fallback</tspan></text>
+    <text x="60" y="395" fill="#94a3b8">│   └── supabase-js.js         <tspan fill="#475569"># Minified local Supabase build</tspan></text>
+
+    <text x="40" y="425" fill="#a78bfa">├── popup/ &amp; sidebar/</text>
+    <text x="60" y="450" fill="#94a3b8">│   ├── popup.html &amp; popup.js  <tspan fill="#475569"># Quick actions and user details</tspan></text>
+    <text x="60" y="475" fill="#94a3b8">│   └── sidebar.html           <tspan fill="#475569"># Primary Library browser panel</tspan></text>
+  </g>
+</svg>

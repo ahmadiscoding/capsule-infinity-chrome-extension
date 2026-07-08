@@ -1,0 +1,110 @@
+{
+  "manifest_version": 3,
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuJsRDjMLvBjJizVpbxWS9bkmTPU236bItge0ebVJ/qSfPGK+Cecw9MXbddRKCcFWcO091DtOh4wuZJtISsqxwmArkMKGgxyw1ZDkjucbG+4ZFl/qecEg4DB3jm+fFKg3kA3X1P73uHlafokromiMBEW0s0IoKKvhfIb2CnIAGbKs65WaTMoousfCFBsTO3JJ0s2SDIJU10BsE1tcJDwl0l9Aoen/17HvPP+cnwXFfnSN+E0bPc7vUpdxUdVMHeWmM5BZ9OttZLQLhc1j6pd0S7nrGhpZ5sS51qrTxfS6YoCXGCWnVGTD4LE5zLdoeatA62mWM/hwuBksQJo48GgjQQIDAQAB",
+  "name": "Capsule Infinity",
+  "version": "2.0.0",
+  "description": "Capture AI conversations as reusable Capsules. Drag & drop context across ChatGPT, Claude, Gemini, DeepSeek, and more. Never start from zero again.",
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab",
+    "contextMenus",
+    "unlimitedStorage",
+    "identity",
+    "identity.email"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*",
+    "https://chat.deepseek.com/*",
+    "https://mail.google.com/*",
+    "https://kvdb.io/*",
+    "https://*.openai.com/*",
+    "https://anthropic.com/*",
+    "https://copilot.microsoft.com/*",
+    "https://perplexity.ai/*",
+    "https://poe.com/*",
+    "https://www.phind.com/*",
+    "https://you.com/*",
+    "https://kagi.com/*",
+    "https://www.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidebar/sidebar.html"
+  },
+  "icons": {
+    "16": "assets/icon16.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  },
+  "oauth2": {
+    "client_id": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/chatgpt.js"],
+      "css": ["shared/inject.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/claude.js"],
+      "css": ["shared/inject.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://gemini.google.com/*"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/gemini.js"],
+      "css": ["shared/inject.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://chat.deepseek.com/*"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/deepseek.js"],
+      "css": ["shared/inject.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://mail.google.com/*"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/gmail.js"],
+      "css": ["shared/inject.css"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://copilot.microsoft.com/*",
+        "https://perplexity.ai/*",
+        "https://poe.com/*",
+        "https://www.phind.com/*",
+        "https://you.com/*",
+        "https://kagi.com/*"
+      ],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js"],
+      "css": ["shared/inject.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/*", "shared/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

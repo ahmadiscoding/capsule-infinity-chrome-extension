@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="900" height="480" fill="#0b0b14"/>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="450" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">PROJECT ROADMAP</text>
+  <text x="450" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Upcoming milestones and implementation targets</text>
+
+  <!-- Timeline Line -->
+  <line x1="100" y1="240" x2="800" y2="240" stroke="#1f2937" stroke-width="4" />
+  
+  <!-- Milestone 1 -->
+  <g transform="translate(150, 240)">
+    <circle cx="0" cy="0" r="16" fill="#10b981" stroke="#0b0b14" stroke-width="4" />
+    <text x="0" y="-30" text-anchor="middle" fill="#10b981" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Q1 2026</text>
+    <text x="0" y="40" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="700">Scraping Engine</text>
+    <text x="0" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10" width="120">
+      <tspan x="0" dy="0">Chunked Saving</tspan>
+      <tspan x="0" dy="12">Timeout Safety</tspan>
+    </text>
+  </g>
+
+  <!-- Milestone 2 -->
+  <g transform="translate(350, 240)">
+    <circle cx="0" cy="0" r="16" fill="#10b981" stroke="#0b0b14" stroke-width="4" />
+    <text x="0" y="-30" text-anchor="middle" fill="#10b981" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Q2 2026</text>
+    <text x="0" y="40" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="700">Cloud Sync</text>
+    <text x="0" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">
+      <tspan x="0" dy="0">Supabase Integration</tspan>
+      <tspan x="0" dy="12">Google OAuth (PKCE)</tspan>
+    </text>
+  </g>
+
+  <!-- Milestone 3 -->
+  <g transform="translate(550, 240)">
+    <circle cx="0" cy="0" r="16" fill="#3b82f6" stroke="#0b0b14" stroke-width="4" />
+    <text x="0" y="-30" text-anchor="middle" fill="#3b82f6" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Q3 2026</text>
+    <text x="0" y="40" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="700">Collaboration</text>
+    <text x="0" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">
+      <tspan x="0" dy="0">Shared Teams</tspan>
+      <tspan x="0" dy="12">OTP Invite Keys</tspan>
+    </text>
+  </g>
+
+  <!-- Milestone 4 -->
+  <g transform="translate(750, 240)">
+    <circle cx="0" cy="0" r="16" fill="#8b5cf6" stroke="#0b0b14" stroke-width="4" />
+    <text x="0" y="-30" text-anchor="middle" fill="#c084fc" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Q4 2026</text>
+    <text x="0" y="40" text-anchor="middle" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="12" font-weight="700">Offline-First</text>
+    <text x="0" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">
+      <tspan x="0" dy="0">Queue-based Sync</tspan>
+      <tspan x="0" dy="12">Mobile Extension build</tspan>
+    </text>
+  </g>
+</svg>

@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="900" height="480" fill="#0b0b14"/>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="450" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">EXTENSION PERMISSIONS SCOPE</text>
+  <text x="450" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Security model and system access definitions</text>
+
+  <!-- Permissions Bubbles -->
+  <g transform="translate(100, 100)">
+    <rect x="0" y="0" width="180" height="100" rx="8" fill="#131322" stroke="#3b82f6" stroke-width="1.5" />
+    <text x="90" y="30" text-anchor="middle" fill="#3b82f6" font-family="system-ui, sans-serif" font-size="13" font-weight="700">activeTab</text>
+    <text x="90" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">
+      <tspan x="90" dy="0">Temporary DOM read access</tspan>
+      <tspan x="90" dy="15">to scraping targets</tspan>
+    </text>
+  </g>
+
+  <g transform="translate(360, 100)">
+    <rect x="0" y="0" width="180" height="100" rx="8" fill="#131322" stroke="#8b5cf6" stroke-width="1.5" />
+    <text x="90" y="30" text-anchor="middle" fill="#c084fc" font-family="system-ui, sans-serif" font-size="13" font-weight="700">storage</text>
+    <text x="90" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">
+      <tspan x="90" dy="0">Local caching database</tspan>
+      <tspan x="90" dy="15">fallback structures</tspan>
+    </text>
+  </g>
+
+  <g transform="translate(620, 100)">
+    <rect x="0" y="0" width="180" height="100" rx="8" fill="#131322" stroke="#10b981" stroke-width="1.5" />
+    <text x="90" y="30" text-anchor="middle" fill="#10b981" font-family="system-ui, sans-serif" font-size="13" font-weight="700">identity</text>
+    <text x="90" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">
+      <tspan x="90" dy="0">Launches WebAuthFlow</tspan>
+      <tspan x="90" dy="15">for Google OAuth Login</tspan>
+    </text>
+  </g>
+
+  <g transform="translate(230, 260)">
+    <rect x="0" y="0" width="180" height="100" rx="8" fill="#131322" stroke="#ec4899" stroke-width="1.5" />
+    <text x="90" y="30" text-anchor="middle" fill="#f472b6" font-family="system-ui, sans-serif" font-size="13" font-weight="700">sidePanel</text>
+    <text x="90" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">
+      <tspan x="90" dy="0">Floating context panel</tspan>
+      <tspan x="90" dy="15">library display window</tspan>
+    </text>
+  </g>
+
+  <g transform="translate(490, 260)">
+    <rect x="0" y="0" width="180" height="100" rx="8" fill="#131322" stroke="#f59e0b" stroke-width="1.5" />
+    <text x="90" y="30" text-anchor="middle" fill="#f59e0b" font-family="system-ui, sans-serif" font-size="13" font-weight="700">host_permissions</text>
+    <text x="90" y="60" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="10">
+      <tspan x="90" dy="0">ChatGPT, Claude, Gemini</tspan>
+      <tspan x="90" dy="15">injected button scopes</tspan>
+    </text>
+  </g>
+</svg>

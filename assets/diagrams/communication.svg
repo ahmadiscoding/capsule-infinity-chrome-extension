@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 480" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="900" height="480" fill="#0b0b14"/>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="450" y="38" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="1">MESSAGE PASSING PIPELINE</text>
+  <text x="450" y="58" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="12" font-weight="500">Cross-thread communications within the Chrome Extension</text>
+
+  <!-- Left: Content Script -->
+  <g transform="translate(80, 160)">
+    <rect x="0" y="0" width="200" height="150" rx="8" fill="#131322" stroke="#3b82f6" stroke-width="1.5" />
+    <text x="100" y="30" text-anchor="middle" fill="#3b82f6" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Content Script</text>
+    <text x="20" y="70" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● START_CHUNKED_SAVE</text>
+    <text x="20" y="95" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● SAVE_CHUNK</text>
+    <text x="20" y="120" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● COMMIT_CHUNKED_SAVE</text>
+  </g>
+
+  <!-- Center: Background Service Worker -->
+  <g transform="translate(350, 140)">
+    <rect x="0" y="0" width="200" height="190" rx="8" fill="#131322" stroke="#8b5cf6" stroke-width="1.5" />
+    <text x="100" y="30" text-anchor="middle" fill="#c084fc" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Background Worker</text>
+    <text x="100" y="70" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Assembles Chunks</text>
+    <text x="100" y="95" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Launches OAuth Flow</text>
+    <text x="100" y="120" text-anchor="middle" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">Syncs Cloud Database</text>
+    <text x="100" y="150" text-anchor="middle" fill="#10b981" font-family="system-ui, sans-serif" font-size="11">Broadcaster Hub</text>
+  </g>
+
+  <!-- Right: Sidebar UI -->
+  <g transform="translate(620, 160)">
+    <rect x="0" y="0" width="200" height="150" rx="8" fill="#131322" stroke="#ec4899" stroke-width="1.5" />
+    <text x="100" y="30" text-anchor="middle" fill="#f472b6" font-family="system-ui, sans-serif" font-size="13" font-weight="700">Sidebar / Popup UI</text>
+    <text x="20" y="70" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● TRIGGER_GOOGLE_AUTH</text>
+    <text x="20" y="95" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● AUTH_SUCCESS</text>
+    <text x="20" y="120" fill="#94a3b8" font-family="system-ui, sans-serif" font-size="11">● CLEAR_AUTH_TOKEN</text>
+  </g>
+
+  <!-- Arrows -->
+  <path d="M 285 210 L 340 210" fill="none" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow-blue)" />
+  <path d="M 615 210 L 560 210" fill="none" stroke="#ec4899" stroke-width="2" marker-end="url(#arrow-pink)" />
+  <path d="M 550 250 L 610 250" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="4,4" marker-end="url(#arrow-green)" />
+
+  <defs>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#3b82f6" />
+    </marker>
+    <marker id="arrow-pink" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#ec4899" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#10b981" />
+    </marker>
+  </defs>
+</svg>

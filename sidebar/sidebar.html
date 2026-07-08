@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capsule Infinity - Library</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 360px; height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a14; color: #e2e8f0;
+      overflow: hidden; display: flex; flex-direction: column;
+    }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+    input, textarea, select, button { font-family: inherit; }
+
+    /* ====== LOGIN SCREEN ====== */
+    .login-screen {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 32px 28px;
+    }
+    .login-logo-lg {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 18px; display: flex; align-items: center; justify-content: center;
+      font-size: 30px; margin-bottom: 20px;
+      box-shadow: 0 12px 32px rgba(99,102,241,0.35);
+    }
+    .login-title-lg { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .login-sub-lg { font-size: 13px; color: #64748b; margin-bottom: 28px; }
+    .login-form-lg { width: 100%; max-width: 300px; }
+    .form-group { margin-bottom: 14px; }
+    .form-label {
+      display: block; font-size: 11px; font-weight: 600;
+      color: #94a3b8; margin-bottom: 5px;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .form-input {
+      width: 100%; padding: 10px 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; color: #e2e8f0;
+      font-size: 13px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+    .form-input::placeholder { color: #475569; }
+    .form-textarea {
+      width: 100%; min-height: 120px; padding: 10px 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; color: #e2e8f0;
+      font-size: 12px; outline: none; resize: vertical;
+      line-height: 1.5;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      transition: border-color 0.2s;
+    }
+    .form-textarea:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+    .form-select {
+      width: 100%; padding: 10px 12px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; color: #e2e8f0;
+      font-size: 13px; outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+    .form-select:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.2); }
+    .form-select option { background: #1a1a2e; color: #e2e8f0; }
+
+    .btn {
+      padding: 10px 16px; border-radius: 8px; border: none;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; font-family: inherit;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .btn-full { width: 100%; }
+    .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; }
+    .btn-primary:hover { box-shadow: 0 4px 16px rgba(99,102,241,0.4); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+    .btn-secondary { background: rgba(255,255,255,0.08); color: #94a3b8; }
+    .btn-secondary:hover { background: rgba(255,255,255,0.14); color: #e2e8f0; }
+    .btn-danger { background: rgba(239,68,68,0.15); color: #fca5a5; }
+    .btn-danger:hover { background: rgba(239,68,68,0.25); }
+    .btn-ghost { background: transparent; color: #94a3b8; padding: 6px 10px; font-size: 12px; }
+    .btn-ghost:hover { color: #a5b4fc; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
+    .btn-icon {
+      width: 32px; height: 32px; padding: 0;
+      border-radius: 8px; border: none;
+      background: transparent; color: #94a3b8;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    .btn-icon:hover { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+
+    .login-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin: 18px 0; color: #475569; font-size: 11px; width: 100%;
+    }
+    .login-divider::before, .login-divider::after {
+      content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.08);
+    }
+    .login-toggle { text-align: center; margin-top: 18px; font-size: 12px; color: #64748b; }
+    .login-toggle a { color: #a5b4fc; text-decoration: none; cursor: pointer; font-weight: 600; }
+    .login-toggle a:hover { text-decoration: underline; }
+    .login-error {
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 8px; padding: 8px 12px; font-size: 12px; color: #fca5a5;
+      margin-bottom: 14px; display: none;
+    }
+    .login-error.visible { display: block; }
+
+    .btn-google {
+      width: 100%; padding: 10px 16px; border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.06); color: #e2e8f0;
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .btn-google:hover { background: rgba(255,255,255,0.1); }
+    .btn-google svg { width: 18px; height: 18px; flex-shrink: 0; }
+
+    /* ====== MAIN LAYOUT ====== */
+    .app-screen { display: none; flex-direction: column; height: 100vh; }
+    .app-screen.active { display: flex; }
+
+    /* Header */
+    .app-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: linear-gradient(180deg, rgba(99,102,241,0.06) 0%, transparent 100%);
+      flex-shrink: 0;
+    }
+    .app-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .app-header-left { display: flex; align-items: center; gap: 10px; }
+    .app-logo {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .app-title { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+    .app-header-right { display: flex; gap: 2px; }
+
+    /* Search */
+    .search-box {
+      position: relative; display: flex; align-items: center;
+    }
+    .search-icon {
+      position: absolute; left: 10px;
+      color: #475569; font-size: 13px;
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%; padding: 8px 10px 8px 32px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px; color: #e2e8f0;
+      font-size: 12px; outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.15); }
+    .search-input::placeholder { color: #475569; }
+    .search-clear {
+      position: absolute; right: 8px;
+      width: 18px; height: 18px; border-radius: 4px;
+      border: none; background: transparent; color: #64748b;
+      cursor: pointer; font-size: 11px;
+      display: none; align-items: center; justify-content: center;
+    }
+    .search-clear.visible { display: flex; }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex; padding: 0 16px; gap: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+    }
+    .tab-item {
+      flex: 1; padding: 10px 0; text-align: center;
+      font-size: 12px; font-weight: 500; color: #64748b;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      background: none; border-top: none; border-left: none; border-right: none;
+      font-family: inherit;
+    }
+    .tab-item:hover { color: #94a3b8; }
+    .tab-item.active { color: #a5b4fc; border-bottom-color: #6366f1; }
+    .tab-count {
+      font-size: 10px; background: rgba(99,102,241,0.15);
+      color: #a5b4fc; padding: 1px 6px; border-radius: 8px;
+    }
+
+    /* Content area */
+    .tab-content { flex: 1; overflow: hidden; display: none; flex-direction: column; }
+    .tab-content.active { display: flex; }
+
+    .scroll-area {
+      flex: 1; overflow-y: auto; padding: 12px 14px 40px 14px;
+    }
+
+    /* ====== FOLDERS ====== */
+    .folder-section { margin-bottom: 16px; }
+    .folder-section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .folder-section-title { font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+    .folder-list { display: flex; flex-direction: column; gap: 2px; }
+    .folder-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border-radius: 8px;
+      cursor: pointer; transition: background 0.15s;
+      position: relative;
+    }
+    .folder-item:hover { background: rgba(255,255,255,0.04); }
+    .folder-item.active { background: rgba(99,102,241,0.1); }
+    .folder-dot { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+    .folder-name { font-size: 13px; color: #e2e8f0; flex: 1; }
+    .folder-count { font-size: 10px; color: #64748b; }
+    .folder-actions {
+      display: none; gap: 2px;
+    }
+    .folder-item:hover .folder-actions { display: flex; }
+    .folder-action-sm {
+      width: 22px; height: 22px; border-radius: 4px;
+      border: none; background: transparent; color: #64748b;
+      cursor: pointer; font-size: 11px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.1s;
+    }
+    .folder-action-sm:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+    /* ====== CAPSULE LIST ====== */
+    .capsule-list { display: flex; flex-direction: column; gap: 4px; }
+    .capsule-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 12px; border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      cursor: pointer; transition: all 0.15s;
+      position: relative;
+    }
+    .capsule-item:hover {
+      background: rgba(99,102,241,0.06);
+      border-color: rgba(99,102,241,0.12);
+    }
+    .capsule-item.dragging { opacity: 0.4; }
+    .capsule-item.drag-over { border-color: #6366f1; background: rgba(99,102,241,0.1); }
+    .capsule-drag-handle {
+      color: #475569; cursor: grab; padding: 2px;
+      font-size: 10px; line-height: 1; user-select: none;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .capsule-drag-handle:active { cursor: grabbing; }
+    .capsule-platform-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+    .capsule-info { flex: 1; min-width: 0; }
+    .capsule-title {
+      font-size: 13px; font-weight: 600; color: #e2e8f0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+    .capsule-meta {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 10px; color: #64748b;
+    }
+    .capsule-platform-tag {
+      background: rgba(255,255,255,0.06); padding: 1px 6px;
+      border-radius: 4px; text-transform: uppercase;
+      font-weight: 600; font-size: 9px; letter-spacing: 0.3px;
+    }
+    .capsule-folder-tag {
+      display: inline-flex; align-items: center; gap: 3px;
+      font-size: 9px; color: #94a3b8;
+    }
+    .capsule-folder-tag .dot { width: 5px; height: 5px; border-radius: 2px; }
+    .capsule-item-actions {
+      display: none; gap: 2px; flex-shrink: 0;
+    }
+    .capsule-item:hover .capsule-item-actions { display: flex; }
+    .capsule-act-btn {
+      width: 24px; height: 24px; border-radius: 5px;
+      border: none; background: transparent; color: #64748b;
+      cursor: pointer; font-size: 12px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.12s;
+    }
+    .capsule-act-btn:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+
+    .empty-state { text-align: center; padding: 40px 16px; color: #475569; }
+    .empty-state-icon { font-size: 36px; margin-bottom: 8px; opacity: 0.4; }
+    .empty-state-text { font-size: 12px; line-height: 1.6; }
+
+    /* ====== TEAMS ====== */
+    .team-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; padding: 14px;
+      margin-bottom: 10px;
+    }
+    .team-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .team-name { font-size: 14px; font-weight: 600; }
+    .team-desc { font-size: 11px; color: #64748b; margin-bottom: 10px; line-height: 1.4; }
+    .team-invite-code {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,0.04); padding: 6px 10px;
+      border-radius: 6px; margin-bottom: 10px;
+    }
+    .team-invite-code code {
+      flex: 1; font-size: 12px; color: #a5b4fc;
+      font-family: 'SF Mono', monospace;
+    }
+    .team-members { margin-top: 8px; }
+    .team-member {
+      display: flex; align-items: center; gap: 8px;
+      padding: 5px 0;
+    }
+    .team-member-avatar {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 600; color: white; flex-shrink: 0;
+    }
+    .team-member-name { font-size: 12px; color: #e2e8f0; flex: 1; }
+    .team-member-role { font-size: 10px; color: #64748b; }
+
+    .add-member-row {
+      display: flex; gap: 6px; margin-top: 8px;
+    }
+    .add-member-row .form-input { flex: 1; padding: 7px 10px; font-size: 12px; }
+
+    /* ====== SETTINGS ====== */
+    .settings-section { margin-bottom: 20px; }
+    .settings-section-title {
+      font-size: 11px; font-weight: 600; color: #64748b;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+    .setting-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; border-radius: 8px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      margin-bottom: 6px;
+    }
+    .setting-label { font-size: 13px; color: #e2e8f0; }
+    .setting-desc { font-size: 11px; color: #64748b; margin-top: 1px; }
+    .toggle-switch {
+      width: 36px; height: 20px; border-radius: 10px;
+      background: rgba(255,255,255,0.15); cursor: pointer;
+      position: relative; transition: background 0.2s;
+      flex-shrink: 0; border: none;
+    }
+    .toggle-switch.on { background: #6366f1; }
+    .toggle-switch::after {
+      content: ''; position: absolute;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: white; top: 2px; left: 2px;
+      transition: transform 0.2s;
+    }
+    .toggle-switch.on::after { transform: translateX(16px); }
+    .settings-input-group {
+      margin-bottom: 10px;
+    }
+    .settings-input-row {
+      display: flex; gap: 6px;
+    }
+    .settings-input-row .form-input { flex: 1; }
+
+    /* ====== MODAL ====== */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(4px);
+      z-index: 100; display: none;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #1e1e2e; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px; width: 340px; max-width: 95%;
+      max-height: 85vh; overflow: hidden;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      animation: modal-in 0.2s cubic-bezier(0.4,0,0.2,1);
+    }
+    @keyframes modal-in { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: none; } }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .modal-title { font-size: 15px; font-weight: 600; }
+    .modal-close {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: none; background: transparent; color: #94a3b8;
+      cursor: pointer; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .modal-close:hover { background: rgba(255,255,255,0.1); color: white; }
+    .modal-body { padding: 16px; overflow-y: auto; max-height: 60vh; }
+    .modal-footer {
+      padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+
+    /* Version history */
+    .version-item {
+      padding: 10px; border-radius: 8px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      margin-bottom: 6px; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .version-item:hover { background: rgba(99,102,241,0.06); }
+    .version-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .version-note { font-size: 12px; font-weight: 600; color: #e2e8f0; }
+    .version-date { font-size: 10px; color: #64748b; }
+    .version-preview {
+      font-size: 11px; color: #64748b;
+      white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; margin-top: 4px;
+      font-family: 'SF Mono', monospace;
+    }
+
+    /* Capsule detail view */
+    .capsule-detail {
+      position: absolute; inset: 0;
+      background: #0a0a14; z-index: 50;
+      display: none; flex-direction: column;
+      animation: modal-in 0.2s ease;
+    }
+    .capsule-detail.open { display: flex; }
+    .detail-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-shrink: 0;
+    }
+    .detail-back {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: none; background: rgba(255,255,255,0.06);
+      color: #94a3b8; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; transition: all 0.15s;
+    }
+    .detail-back:hover { background: rgba(255,255,255,0.1); color: #e2e8f0; }
+    .detail-title {
+      flex: 1; font-size: 14px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .detail-body {
+      flex: 1; overflow-y: auto; padding: 14px;
+    }
+    .detail-content {
+      font-size: 12px; line-height: 1.7;
+      color: #cbd5e1; white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    }
+    .detail-meta-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 14px; border-top: 1px solid rgba(255,255,255,0.06);
+      font-size: 11px; color: #64748b; flex-shrink: 0;
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: white; border-radius: 50%;
+      animation: spin 0.6s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast-container {
+      position: fixed; bottom: 16px; left: 16px; right: 16px;
+      z-index: 200; pointer-events: none;
+    }
+    .toast {
+      background: #1a1a2e; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 8px 14px;
+      font-size: 12px; color: #e2e8f0;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      display: flex; align-items: center; gap: 8px;
+      animation: toast-in 0.2s ease; pointer-events: auto;
+      margin-top: 6px;
+    }
+    .toast.success { border-left: 3px solid #10b981; }
+    .toast.error { border-left: 3px solid #ef4444; }
+    .toast.info { border-left: 3px solid #6366f1; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* Floating action button */
+    .fab {
+      position: fixed; bottom: 20px; right: 20px;
+      width: 44px; height: 44px; border-radius: 12px;
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      border: none; color: white; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; box-shadow: 0 4px 16px rgba(99,102,241,0.4);
+      transition: all 0.2s; z-index: 10;
+    }
+    .fab:hover { transform: scale(1.08); box-shadow: 0 6px 24px rgba(99,102,241,0.5); }
+
+    /* Tags in capsule edit */
+    .tags-container {
+      display: flex; flex-wrap: wrap; gap: 4px;
+      margin-top: 6px;
+    }
+    .tag {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: rgba(99,102,241,0.15); color: #a5b4fc;
+      padding: 3px 8px; border-radius: 12px;
+      font-size: 11px; font-weight: 500;
+    }
+    .tag-remove {
+      cursor: pointer; font-size: 13px; opacity: 0.6;
+      background: none; border: none; color: inherit;
+      padding: 0; line-height: 1;
+    }
+    .tag-remove:hover { opacity: 1; }
+
+    /* Permanent Elegant Footer Watermark */
+    .ci-footer-watermark {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 28px;
+      background: #0f0f15;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      z-index: 9999;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ====== LOGIN SCREEN ====== -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-logo-lg">💊</div>
+    <div class="login-title-lg">Capsule Infinity</div>
+    <div class="login-sub-lg">Sign in to access your library</div>
+
+    <div class="login-error" id="loginError"></div>
+
+    <div class="login-form-lg">
+      <div id="loginForm">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="loginEmail" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary btn-full" id="loginBtn">Sign In</button>
+        <div class="login-divider">or continue with</div>
+        <button class="btn-google" id="googleLoginBtn">
+          <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Sign in with Google
+        </button>
+        <div class="login-toggle">Don't have an account? <a id="showRegister">Create one</a></div>
+      </div>
+
+      <div id="registerForm" style="display:none;">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" class="form-input" id="regName" placeholder="John Doe" autocomplete="name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="regEmail" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="regPassword" placeholder="Min 6 characters" autocomplete="new-password">
+        </div>
+        <button class="btn btn-primary btn-full" id="registerBtn">Create Account</button>
+        <div class="login-divider">or continue with</div>
+        <button class="btn-google" id="googleRegBtn">
+          <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Sign up with Google
+        </button>
+        <div class="login-toggle">Already have an account? <a id="showLogin">Sign in</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== MAIN APP ====== -->
+  <div class="app-screen" id="appScreen">
+
+    <!-- Header -->
+    <div class="app-header">
+      <div class="app-header-top">
+        <div class="app-header-left">
+          <div class="app-logo">💊</div>
+          <span class="app-title">Capsule Infinity</span>
+        </div>
+        <div class="app-header-right">
+          <button class="btn-icon" id="btnSync" title="Sync">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 4v5h5"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 9"/></svg>
+          </button>
+          <button class="btn-icon" id="btnExport" title="Export">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <button class="btn-icon" id="btnImport" title="Import">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </button>
+          <button class="btn-icon" id="btnLogout" title="Sign Out">
+            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="searchInput" placeholder="Search capsules...">
+        <button class="search-clear" id="searchClear">✕</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button class="tab-item active" data-tab="library">
+        📚 Library <span class="tab-count" id="tabCountLibrary">0</span>
+      </button>
+      <button class="tab-item" data-tab="teams">
+        👥 Teams
+      </button>
+      <button class="tab-item" data-tab="settings">
+        ⚙️ Settings
+      </button>
+    </div>
+
+    <!-- ====== LIBRARY TAB ====== -->
+    <div class="tab-content active" id="tab-library">
+      <div class="scroll-area">
+        <!-- Folders -->
+        <div class="folder-section">
+          <div class="folder-section-header">
+            <span class="folder-section-title">Folders</span>
+            <button class="btn-ghost btn-sm" id="btnAddFolder">+ New</button>
+          </div>
+          <div class="folder-list" id="folderList"></div>
+        </div>
+
+        <!-- Capsules -->
+        <div class="folder-section">
+          <div class="folder-section-header">
+            <span class="folder-section-title" id="capsuleSectionTitle">All Capsules</span>
+            <span style="font-size:11px;color:#64748b;" id="capsuleCountLabel">0 items</span>
+          </div>
+          <div class="capsule-list" id="capsuleList">
+            <div class="empty-state">
+              <div class="empty-state-icon">💊</div>
+              <div class="empty-state-text">No capsules yet.<br>Go capture a conversation!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button class="fab" id="fabNew" title="New Capsule">+</button>
+    </div>
+
+    <!-- ====== TEAMS TAB ====== -->
+    <div class="tab-content" id="tab-teams">
+      <div class="scroll-area">
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button class="btn btn-primary btn-sm" id="btnCreateTeam" style="flex:1;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="5" y2="12"/><line x1="12" y1="12" x2="12" y2="5"/><line x1="12" y1="5" x2="5" y2="5"/></svg>
+            Create Team
+          </button>
+          <button class="btn btn-secondary btn-sm" id="btnJoinTeam" style="flex:1;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+            Join Team
+          </button>
+        </div>
+        <div id="teamsList">
+          <div class="empty-state">
+            <div class="empty-state-icon">👥</div>
+            <div class="empty-state-text">No teams yet.<br>Create a team to share capsules!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== SETTINGS TAB ====== -->
+    <div class="tab-content" id="tab-settings">
+      <div class="scroll-area">
+        <!-- User Profile Card -->
+        <div class="settings-section" id="profileSection">
+          <div class="settings-section-title">Profile</div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:16px;display:flex;flex-direction:column;align-items:center;text-align:center;">
+            <div id="profileAvatar" style="width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;font-size:22px;color:white;font-weight:700;margin-bottom:10px;">U</div>
+            <div id="profileName" style="font-size:15px;font-weight:700;color:#e2e8f0;">User</div>
+            <div id="profileEmail" style="font-size:12px;color:#64748b;margin-top:2px;">user@example.com</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;margin-top:14px;">
+              <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 4px;">
+                <div id="profileCapsuleCount" style="font-size:16px;font-weight:700;background:linear-gradient(135deg,#a5b4fc,#c4b5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0</div>
+                <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.3px;margin-top:2px;">Capsules</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 4px;">
+                <div id="profileFolderCount" style="font-size:16px;font-weight:700;background:linear-gradient(135deg,#a5b4fc,#c4b5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0</div>
+                <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.3px;margin-top:2px;">Folders</div>
+              </div>
+              <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 4px;">
+                <div id="profileTeamCount" style="font-size:16px;font-weight:700;background:linear-gradient(135deg,#a5b4fc,#c4b5fd);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">0</div>
+                <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:0.3px;margin-top:2px;">Teams</div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;width:100%;margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);">
+              <span style="font-size:10px;color:#64748b;">Member Since</span>
+              <span id="profileJoinDate" style="font-size:11px;color:#e2e8f0;">N/A</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;width:100%;margin-top:6px;">
+              <span style="font-size:10px;color:#64748b;">Account ID</span>
+              <span id="profileUserId" style="font-size:9px;color:#475569;font-family:monospace;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">N/A</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Connection</div>
+          <div class="settings-input-group" style="margin-bottom: 12px;">
+            <label class="form-label">API Base URL</label>
+            <div class="settings-input-row">
+              <input type="text" class="form-input" id="settingApiUrl" placeholder="https://your-server.com">
+              <button class="btn btn-primary btn-sm" id="btnSaveApiUrl">Save</button>
+            </div>
+            <div style="font-size:10px;color:#475569;margin-top:4px;">Leave empty for local-only mode</div>
+          </div>
+          <div class="settings-input-group" style="margin-bottom: 12px;">
+            <label class="form-label">Google Client ID (OAuth Web App)</label>
+            <div class="settings-input-row">
+              <input type="text" class="form-input" id="settingGoogleClientId" placeholder="xxxx.apps.googleusercontent.com">
+            </div>
+          </div>
+          <div class="settings-input-group" style="margin-bottom: 12px;">
+            <label class="form-label">Supabase URL</label>
+            <div class="settings-input-row">
+              <input type="text" class="form-input" id="settingSupabaseUrl" placeholder="https://xxxx.supabase.co">
+            </div>
+          </div>
+          <div class="settings-input-group">
+            <label class="form-label">Supabase Anon Key</label>
+            <div class="settings-input-row">
+              <input type="password" class="form-input" id="settingSupabaseKey" placeholder="your-anon-key">
+              <button class="btn btn-primary btn-sm" id="btnSaveSupabase">Save</button>
+            </div>
+            <div style="font-size:10px;color:#475569;margin-top:4px;">Enables cloud sync & collaborative features</div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Preferences</div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Floating Capture Button</div>
+              <div class="setting-desc">Show on supported AI sites</div>
+            </div>
+            <button class="toggle-switch on" id="toggleFloatingBtn" data-key="showFloatingButton"></button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Drag & Drop</div>
+              <div class="setting-desc">Enable capsule drag to input fields</div>
+            </div>
+            <button class="toggle-switch on" id="toggleDragDrop" data-key="dragDropEnabled"></button>
+          </div>
+          <div class="setting-row">
+            <div>
+              <div class="setting-label">Auto Sync</div>
+              <div class="setting-desc">Sync capsules every 5 minutes</div>
+            </div>
+            <button class="toggle-switch on" id="toggleAutoSync" data-key="autoSync"></button>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Data</div>
+          <div class="setting-row" style="cursor:pointer;" id="btnExportSettings">
+            <div>
+              <div class="setting-label">Export All Data</div>
+              <div class="setting-desc">Download capsules as JSON</div>
+            </div>
+            <span style="color:#64748b;">→</span>
+          </div>
+          <div class="setting-row" style="cursor:pointer;" id="btnImportSettings">
+            <div>
+              <div class="setting-label">Import Data</div>
+              <div class="setting-desc">Load capsules from JSON file</div>
+            </div>
+            <span style="color:#64748b;">→</span>
+          </div>
+          <div class="setting-row" style="cursor:pointer;" id="btnClearData">
+            <div>
+              <div class="setting-label" style="color:#fca5a5;">Clear All Data</div>
+              <div class="setting-desc">Delete all local capsules and folders</div>
+            </div>
+            <span style="color:#ef4444;">🗑</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="settings-section-title">Account</div>
+          <div class="setting-row" style="cursor:pointer;" id="btnSignOutSidebar">
+            <div>
+              <div class="setting-label">Sign Out</div>
+              <div class="setting-desc">Sign out of your account</div>
+            </div>
+            <span style="color:#64748b;">→</span>
+          </div>
+          <div class="setting-row" style="cursor:pointer;" id="btnDeleteAccountSidebar">
+            <div>
+              <div class="setting-label" style="color:#fca5a5;">Delete Account</div>
+              <div class="setting-desc">Permanently delete account and all data</div>
+            </div>
+            <span style="color:#ef4444;">🗑</span>
+          </div>
+        </div>
+
+        <div style="text-align:center;padding:20px 0 10px;font-size:11px;color:#475569;">
+          Capsule Infinity v2.0.0
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== CAPSULE DETAIL VIEW ====== -->
+  <div class="capsule-detail" id="capsuleDetail">
+    <div class="detail-header">
+      <button class="detail-back" id="detailBack">←</button>
+      <span class="detail-title" id="detailTitle">Capsule</span>
+      <button class="btn-icon" id="detailEdit" title="Edit">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button class="btn-icon" id="detailVersions" title="Version History">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+    </div>
+    <div class="detail-body">
+      <div class="detail-content" id="detailContent"></div>
+    </div>
+    <div class="detail-meta-bar">
+      <span id="detailPlatform">—</span>
+      <span id="detailWords">0 words</span>
+      <span id="detailDate">—</span>
+      <span style="flex:1;"></span>
+      <button class="btn btn-sm btn-secondary" id="detailCopy">📋 Copy</button>
+      <button class="btn btn-sm btn-danger" id="detailDelete">🗑 Delete</button>
+    </div>
+  </div>
+
+  <!-- ====== CREATE/EDIT CAPSULE MODAL ====== -->
+  <div class="modal-overlay" id="capsuleModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="capsuleModalTitle">New Capsule</span>
+        <button class="modal-close" id="capsuleModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editCapsuleId">
+        <div class="form-group">
+          <label class="form-label">Title</label>
+          <input type="text" class="form-input" id="capsuleEditTitle" placeholder="Capsule title...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Content</label>
+          <textarea class="form-textarea" id="capsuleEditContent" placeholder="Paste or type content..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Platform</label>
+          <select class="form-select" id="capsuleEditPlatform">
+            <option value="manual">Manual</option>
+            <option value="chatgpt">ChatGPT</option>
+            <option value="claude">Claude</option>
+            <option value="gemini">Gemini</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="gmail">Gmail</option>
+            <option value="perplexity">Perplexity</option>
+            <option value="poe">Poe</option>
+            <option value="copilot">Copilot</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Folder</label>
+          <select class="form-select" id="capsuleEditFolder">
+            <option value="">None</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tags (comma separated)</label>
+          <input type="text" class="form-input" id="capsuleEditTags" placeholder="react, debugging, tips...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="capsuleModalCancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="capsuleModalSave">Save Capsule</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== CREATE TEAM MODAL ====== -->
+  <div class="modal-overlay" id="createTeamModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Create Team</span>
+        <button class="modal-close" id="createTeamModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Team Name</label>
+          <input type="text" class="form-input" id="newTeamName" placeholder="My Team">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-input" id="newTeamDesc" placeholder="What's this team about?">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="createTeamCancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="createTeamSave">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== JOIN TEAM MODAL ====== -->
+  <div class="modal-overlay" id="joinTeamModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Join Team</span>
+        <button class="modal-close" id="joinTeamModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Invite Code</label>
+          <input type="text" class="form-input" id="joinTeamCode" placeholder="Paste invite code here...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="joinTeamCancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="joinTeamSubmit">Join</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== NEW FOLDER MODAL ====== -->
+  <div class="modal-overlay" id="folderModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="folderModalTitle">New Folder</span>
+        <button class="modal-close" id="folderModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editFolderId">
+        <div class="form-group">
+          <label class="form-label">Folder Name</label>
+          <input type="text" class="form-input" id="folderNameInput" placeholder="Folder name...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Color</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;" id="folderColorPicker">
+            <button class="color-opt" data-color="#6366f1" style="width:28px;height:28px;border-radius:6px;background:#6366f1;border:2px solid transparent;cursor:pointer;transition:all 0.15s;"></button>
+            <button class="color-opt" data-color="#10b981" style="width:28px;height:28px;border-radius:6px;background:#10b981;border:2px solid transparent;cursor:pointer;transition:all 0.15s;"></button>
+            <button class="color-opt" data-color="#f59e0b" style="width:28px;height:28px;border-radius:6px;background:#f59e0b;border:2px solid transparent;cursor:pointer;transition:all 0.15s;"></button>
+            <button class="color-opt" data-color="#ec4899" style="width:28px;height:28px;border-radius:6px;background:#ec4899;border:2px solid transparent;cursor:pointer;transition:all 0.15s;"></button>
+            <button class="color-opt" data-color="#8b5cf6" style="width:28px;height:28px;border-radius:6px;background:#8b5cf6;border:2px solid transparent;cursor:pointer;transition:all 0.15s;"></button>
+            <button class="color-opt" data-color="#ef4444" style="width:28px;height:28px;border-radius:6px;background:#ef4444;border:2px solid transparent;cursor:pointer;transition:all 0.15s;"></button>
+            <button class="color-opt" data-color="#06b6d4" style="width:28px;height:28px;border-radius:6px;background:#06b6d4;border:2px solid transparent;cursor:pointer;transition:all 0.15s;"></button>
+            <button class="color-opt" data-color="#84cc16" style="width:28px;height:28px;border-radius:6px;background:#84cc16;border:2px solid transparent;cursor:pointer;transition:all 0.15s;"></button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" id="folderModalCancel">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="folderModalSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== VERSION HISTORY MODAL ====== -->
+  <div class="modal-overlay" id="versionModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title">Version History</span>
+        <button class="modal-close" id="versionModalClose">✕</button>
+      </div>
+      <div class="modal-body" id="versionList">
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <div class="empty-state-text">No version history yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden file input for import -->
+  <input type="file" id="importFileInput" accept=".json" style="display:none;">
+
+  <!-- Toast container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Permanent Creator Watermark -->
+  <div class="ci-footer-watermark">
+    Capsule Infinity v1.0.0 | Made with ❤️ by Ahmad
+  </div>
+
+  <!-- Scripts -->
+  <script src="../lib/supabase-js.js"></script>
+  <script src="../lib/storage.js"></script>
+  <script src="../lib/utils.js"></script>
+  <script src="../lib/api.js"></script>
+  <script src="sidebar.js"></script>
+</body>
+</html>

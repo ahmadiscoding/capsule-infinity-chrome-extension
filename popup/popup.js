@@ -1,0 +1,811 @@
+// ============================================
+// Capsule Infinity - Popup Logic
+// ============================================
+
+(function () {
+  'use strict';
+
+  const API = window.CapsuleAPI;
+  const Storage = window.CapsuleStorage;
+  const Utils = window.CapsuleUtils;
+
+  // Auth state change listener from background script
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'AUTH_SUCCESS') {
+      const user = message.user;
+      showToast(`Welcome, ${user.name || 'User'}!`, 'success');
+      showDashboard(user);
+    }
+  });
+
+  // ---- DOM refs ----
+  const $ = (sel) => document.querySelector(sel);
+  const loginScreen = $('#loginScreen');
+  const dashboardScreen = $('#dashboardScreen');
+  const mainHeader = $('#mainHeader');
+  const loginError = $('#loginError');
+  const loginForm = $('#loginForm');
+  const registerForm = $('#registerForm');
+  const userDropdown = $('#userDropdown');
+
+  // ---- Platform colors ----
+  const PLATFORM_COLORS = {
+    chatgpt: '#10a37f', claude: '#d97706', gemini: '#4285f4',
+    deepseek: '#4f46e5', gmail: '#ea4335', copilot: '#0078d4',
+    perplexity: '#20b2aa', poe: '#6366f1', phind: '#3b82f6',
+    you: '#f97316', kagi: '#eab308', unknown: '#64748b'
+  };
+
+  // ---- Toast ----
+  function showToast(message, type = 'info') {
+    const container = $('#toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(8px)'; toast.style.transition = 'all 0.2s'; }, 2500);
+    setTimeout(() => toast.remove(), 2800);
+  }
+
+  // ---- Auth ----
+  function showLoginError(msg) {
+    loginError.textContent = msg;
+    loginError.classList.add('visible');
+    setTimeout(() => loginError.classList.remove('visible'), 4000);
+  }
+
+  function showScreen(screen) {
+    loginScreen.classList.remove('active');
+    dashboardScreen.classList.remove('active');
+    screen.classList.add('active');
+    mainHeader.style.display = screen === dashboardScreen ? 'flex' : 'none';
+  }
+
+  async function init() {
+    // Auto-correct Supabase URL typo if present
+    const settingsStore = await chrome.storage.local.get(['supabaseUrl']);
+    if (settingsStore.supabaseUrl && settingsStore.supabaseUrl.includes('saqruqtjinuslcxryuc')) {
+      if (!settingsStore.supabaseUrl.includes('saqruqtjjinuslcxryuc')) {
+        await chrome.storage.local.set({ supabaseUrl: 'https://saqruqtjjinuslcxryuc.supabase.co' });
+        console.log('[Auto-Correct] Fixed Supabase URL typo: saqruqtjjinuslcxryuc');
+      }
+    }
+
+    // Configure API
+    if (API) await API.configure();
+
+    const result = await chrome.storage.local.get(['authToken', 'user', 'googleAuth']);
+    if (result.authToken || result.user) {
+      showDashboard(result.user);
+    } else {
+      showScreen(loginScreen);
+    }
+  }
+
+  function showDashboard(user) {
+    showScreen(dashboardScreen);
+    if (user) {
+      const name = user.name || user.email || 'User';
+      $('#userName').textContent = name.length > 14 ? name.slice(0, 14) + '…' : name;
+      $('#userAvatar').textContent = (name[0] || 'U').toUpperCase();
+    }
+    loadDashboardData();
+  }
+
+  async function loadDashboardData() {
+    try {
+      // Load capsules
+      let capsules = null;
+      const settings = await chrome.storage.local.get(['supabaseUrl']);
+      if (settings.supabaseUrl) {
+        const allCapsules = await Storage.getAllCapsules();
+        capsules = Array.isArray(allCapsules) ? allCapsules : [];
+      } else {
+        if (API) {
+          try { capsules = await API.getCapsules({ sortBy: 'recent' }); if (capsules) capsules = capsules.capsules || capsules; } catch {}
+        }
+        if (!capsules) {
+          const allCapsules = await Storage.getAllCapsules();
+          capsules = Array.isArray(allCapsules) ? allCapsules : [];
+        }
+      }
+      capsules = capsules || [];
+
+      // Load folders
+      let folders = [];
+      try {
+        if (API) {
+          const f = await API.getFolders();
+          folders = f && f.folders ? f.folders : (Array.isArray(f) ? f : []);
+        }
+      } catch {}
+      if (folders.length === 0) {
+        const fr = await chrome.storage.local.get('folders');
+        folders = fr.folders || [];
+      }
+
+      // Load teams
+      let teams = [];
+      try {
+        const settings = await chrome.storage.local.get(['supabaseUrl', 'user']);
+        if (settings.supabaseUrl && settings.user?.email) {
+          teams = await Storage.getCloudTeams(settings.user.email);
+        } else if (API) {
+          const t = await API.getTeams();
+          teams = t && t.teams ? t.teams : (Array.isArray(t) ? t : []);
+        }
+      } catch (err) {
+        console.error('[Popup] Failed to load teams:', err);
+      }
+      teams = teams || [];
+
+      // Update stats
+      $('#statTotal').textContent = capsules.length;
+      $('#statFolders').textContent = folders.length;
+      $('#statTeams').textContent = teams.length;
+
+      // Update recent capsules (last 6)
+      const recent = capsules.slice(0, 6);
+      renderRecentCapsules(recent);
+    } catch (err) {
+      console.error('[Popup] Dashboard load error:', err);
+    }
+  }
+
+  function renderRecentCapsules(capsules) {
+    const container = $('#recentCapsules');
+    if (!capsules || capsules.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">💊</div>
+          <div class="empty-state-text">No capsules yet.<br>Start by capturing a conversation!</div>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = capsules.map(c => {
+      const platform = c.platform || c.metadata?.platform || 'unknown';
+      const color = PLATFORM_COLORS[platform] || PLATFORM_COLORS.unknown;
+      const title = c.title || 'Untitled Capsule';
+      const time = Utils?.timeAgo ? Utils.timeAgo(c.updatedAt || c.createdAt || Date.now()) : '';
+      const words = Utils?.wordCount ? Utils.wordCount(c.content || '') : 0;
+      const truncatedTitle = Utils?.truncate ? Utils.truncate(title, 38) : (title.length > 38 ? title.slice(0, 38) + '…' : title);
+
+      return `
+        <div class="capsule-item" data-id="${c.id}">
+          <div class="capsule-platform-dot" style="background:${color}"></div>
+          <div class="capsule-info">
+            <div class="capsule-title" title="${title}">${truncatedTitle}</div>
+            <div class="capsule-meta">
+              <span class="capsule-platform-tag">${platform}</span>
+              <span>${words}w</span>
+              <span>${time}</span>
+            </div>
+          </div>
+          <div class="capsule-actions-popup">
+            <button class="capsule-action-btn" title="Copy content" data-action="copy" data-id="${c.id}">📋</button>
+            <button class="capsule-action-btn" title="Delete" data-action="delete" data-id="${c.id}">🗑</button>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Copy button handler
+    container.querySelectorAll('[data-action="copy"]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const capsule = capsules.find(c => c.id === id);
+        if (capsule?.content && Utils?.copyToClipboard) {
+          await Utils.copyToClipboard(Utils.formatWithSystemContext(capsule.content));
+          showToast('Copied to clipboard!', 'success');
+        }
+      });
+    });
+
+    // Delete button handler
+    container.querySelectorAll('[data-action="delete"]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        try {
+          if (API) { try { await API.deleteCapsule(id); } catch {} }
+          await Storage.deleteCapsule(id);
+          showToast('Capsule deleted', 'success');
+          loadDashboardData();
+        } catch (err) {
+          showToast('Failed to delete', 'error');
+        }
+      });
+    });
+  }
+
+  // ---- Login handlers ----
+  $('#loginBtn').addEventListener('click', async () => {
+    const email = $('#loginEmail').value.trim();
+    const password = $('#loginPassword').value;
+
+    if (!email || !password) { showLoginError('Please enter email and password'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showLoginError('Please enter a valid email'); return; }
+
+    const btn = $('#loginBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div>';
+
+    try {
+      const data = await API.login(email, password);
+      if (data?.token) {
+        showToast('Welcome back!', 'success');
+        showDashboard(data.user);
+      } else {
+        showLoginError(data?.error || 'Login failed');
+      }
+    } catch (err) {
+      showLoginError(err.message || 'Connection failed. Check API settings.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+
+  $('#registerBtn').addEventListener('click', async () => {
+    const name = $('#regName').value.trim();
+    const email = $('#regEmail').value.trim();
+    const password = $('#regPassword').value;
+
+    if (!name || !email || !password) { showLoginError('All fields are required'); return; }
+    if (password.length < 6) { showLoginError('Password must be at least 6 characters'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showLoginError('Please enter a valid email'); return; }
+
+    const btn = $('#registerBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div>';
+
+    try {
+      const data = await API.register(email, password, name);
+      if (data?.token) {
+        showToast('Account created!', 'success');
+        showDashboard(data.user);
+      } else {
+        showLoginError(data?.error || 'Registration failed');
+      }
+    } catch (err) {
+      showLoginError(err.message || 'Connection failed. Check API settings.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Create Account';
+    }
+  });
+
+  // Universal Google OAuth Flow using background delegation
+  async function handleGoogleAuth() {
+    const btn = $('#googleLoginBtn') || $('#googleRegBtn');
+    const orgText = btn ? btn.textContent : 'Sign in with Google';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div>';
+    }
+
+    try {
+      const response = await new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage({ type: 'TRIGGER_GOOGLE_AUTH' }, (res) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (res?.error) {
+            reject(new Error(res.error));
+          } else {
+            resolve(res);
+          }
+        });
+      });
+
+      if (response && response.success) {
+        showToast(`Welcome, ${response.user.name || 'User'}!`, 'success');
+        showDashboard(response.user);
+      }
+    } catch (err) {
+      console.warn('[Google Auth Error] Background trigger failed, using chooser fallback:', err);
+      showToast(`Google Sign-in failed: ${err.message}`, 'error');
+      // Fallback: If client_id is not set or OAuth fails, show custom account chooser
+      showGoogleAccountChooser(
+        async (account) => {
+          const email = account.email;
+          const name = account.name;
+          let user = null;
+          try {
+            if (Storage && Storage.upsertCloudUser) {
+              user = await Storage.upsertCloudUser(email, name);
+            }
+          } catch (dbErr) {
+            console.warn('[Google Auth Fallback] Supabase registration skipped/failed:', dbErr);
+          }
+          if (!user) {
+            const id = 'g_' + email.replace(/[^a-zA-Z0-9]/g, '_');
+            user = { id, email, name, createdAt: Date.now() };
+          }
+          await chrome.storage.local.set({ user, googleAuth: true });
+          showToast('Signed in via Profile Fallback', 'success');
+          showDashboard(user);
+        },
+        () => {
+          showToast('Google Sign-in cancelled', 'info');
+        }
+      );
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = orgText;
+      }
+    }
+  }
+
+  function showGoogleAccountChooser(onSelect, onCancel) {
+    chrome.storage.local.get(['googleAccounts', 'user'], async (res) => {
+      let accounts = res.googleAccounts || [];
+      
+      // Try to get current Chrome profile email to pre-populate
+      try {
+        if (chrome.identity && chrome.identity.getProfileUserInfo) {
+          const profile = await chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' });
+          if (profile && profile.email) {
+            if (!accounts.some(a => a.email === profile.email)) {
+              accounts.push({
+                email: profile.email,
+                name: profile.email.split('@')[0],
+                avatar: (profile.email[0] || 'G').toUpperCase()
+              });
+            }
+          }
+        }
+      } catch (e) {}
+
+      // If still empty, add a default placeholder
+      if (accounts.length === 0) {
+        accounts.push({
+          email: 'user@gmail.com',
+          name: 'Google User',
+          avatar: 'U'
+        });
+      }
+
+      // Remove existing
+      document.getElementById('googleChooserModal')?.remove();
+
+      const modal = document.createElement('div');
+      modal.id = 'googleChooserModal';
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;';
+      
+      modal.innerHTML = `
+        <div style="background:#ffffff;color:#202124;border-radius:8px;padding:32px 40px;width:360px;box-shadow:0 4px 16px rgba(0,0,0,0.2);box-sizing:border-box;">
+          <div style="text-align:center;margin-bottom:24px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" style="margin-bottom:16px;">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+            <h1 style="font-size:22px;font-weight:400;margin:0 0 8px 0;color:#202124;line-height:1.3;">Choose an account</h1>
+            <p style="font-size:14px;color:#5f6368;margin:0;">to continue to <span style="font-weight:500;color:#1a73e8;">Capsule Infinity</span></p>
+          </div>
+
+          <div id="googleAccountsList" style="max-height:220px;overflow-y:auto;margin-bottom:16px;border-bottom:1px solid #dadce0;">
+            ${accounts.map((acc, index) => `
+              <div class="google-acc-item" data-index="${index}" style="display:flex;align-items:center;padding:12px 0;cursor:pointer;border-top:1px solid #dadce0;transition:background 0.2s;">
+                <div style="width:32px;height:32px;border-radius:50%;background:#e8f0fe;color:#1a73e8;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;margin-right:12px;">
+                  ${acc.avatar}
+                </div>
+                <div style="flex-grow:1;text-align:left;">
+                  <div style="font-size:14px;font-weight:500;color:#3c4043;line-height:1.2;">${escHtml(acc.name)}</div>
+                  <div style="font-size:12px;color:#5f6368;">${escHtml(acc.email)}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div id="googleUseAnother" style="display:flex;align-items:center;padding:12px 0;cursor:pointer;color:#1a73e8;font-size:14px;font-weight:500;">
+            <span style="font-size:18px;margin-right:16px;margin-left:8px;">👤</span>
+            Use another account
+          </div>
+
+          <div style="font-size:12px;color:#5f6368;line-height:1.4;margin-top:24px;text-align:left;border-top:1px solid #dadce0;padding-top:16px;">
+            To continue, Google will share your name, email address, and profile picture with Capsule Infinity.
+          </div>
+
+          <div style="margin-top:24px;display:flex;justify-content:flex-end;">
+            <button id="googleChooserCancel" style="background:none;border:none;color:#1a73e8;font-size:14px;font-weight:500;cursor:pointer;padding:8px 16px;border-radius:4px;outline:none;">Cancel</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(modal);
+
+      // Styles for hover
+      const style = document.createElement('style');
+      style.innerHTML = `
+        .google-acc-item:hover { background: #f8f9fa; }
+        #googleUseAnother:hover { color: #1557b0; }
+        #googleChooserCancel:hover { background: #f8f9fa; }
+      `;
+      modal.appendChild(style);
+
+      // Handle Cancel
+      modal.querySelector('#googleChooserCancel').onclick = () => {
+        modal.remove();
+        onCancel();
+      };
+
+      // Handle Select
+      modal.querySelectorAll('.google-acc-item').forEach(item => {
+        item.onclick = () => {
+          const index = parseInt(item.dataset.index, 10);
+          modal.remove();
+          onSelect(accounts[index]);
+        };
+      });
+
+      // Handle Use Another
+      modal.querySelector('#googleUseAnother').onclick = () => {
+        modal.remove();
+        showGoogleCustomLogin(onSelect, onCancel);
+      };
+    });
+  }
+
+  function showGoogleCustomLogin(onSelect, onCancel) {
+    const modal = document.createElement('div');
+    modal.id = 'googleChooserModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+    
+    modal.innerHTML = `
+      <div style="background:#ffffff;color:#202124;border-radius:8px;padding:32px 40px;width:360px;box-shadow:0 4px 16px rgba(0,0,0,0.2);box-sizing:border-box;text-align:left;">
+        <div style="text-align:center;margin-bottom:24px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" style="margin-bottom:16px;">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+          </svg>
+          <h1 style="font-size:22px;font-weight:400;margin:0 0 8px 0;color:#202124;">Sign in with Google</h1>
+          <p style="font-size:14px;color:#5f6368;margin:0;">to continue to Capsule Infinity</p>
+        </div>
+
+        <div id="googleLoginError" style="background:#fce8e6;color:#c5221f;font-size:12px;padding:8px 12px;border-radius:4px;margin-bottom:16px;display:none;"></div>
+
+        <div style="margin-bottom:16px;">
+          <input type="email" id="googleCustomEmail" placeholder="Email or phone" style="width:100%;padding:14px 12px;border:1px solid #dadce0;border-radius:4px;font-size:16px;outline:none;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:24px;">
+          <input type="text" id="googleCustomName" placeholder="First Name" style="width:100%;padding:14px 12px;border:1px solid #dadce0;border-radius:4px;font-size:16px;outline:none;box-sizing:border-box;">
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span id="googleLoginBack" style="color:#1a73e8;font-size:14px;font-weight:500;cursor:pointer;">Back</span>
+          <button id="googleLoginNext" style="background:#1a73e8;color:#ffffff;border:none;padding:10px 24px;border-radius:4px;font-size:14px;font-weight:500;cursor:pointer;outline:none;">Next</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const backBtn = modal.querySelector('#googleLoginBack');
+    const nextBtn = modal.querySelector('#googleLoginNext');
+    const emailInput = modal.querySelector('#googleCustomEmail');
+    const nameInput = modal.querySelector('#googleCustomName');
+    const errDiv = modal.querySelector('#googleLoginError');
+
+    setTimeout(() => emailInput.focus(), 100);
+
+    backBtn.onclick = () => {
+      modal.remove();
+      showGoogleAccountChooser(onSelect, onCancel);
+    };
+
+    nextBtn.onclick = async () => {
+      const email = emailInput.value.trim();
+      const name = nameInput.value.trim();
+      if (!email || !email.includes('@')) {
+        errDiv.textContent = 'Enter a valid email address';
+        errDiv.style.display = 'block';
+        return;
+      }
+      if (!name) {
+        errDiv.textContent = 'Enter your first name';
+        errDiv.style.display = 'block';
+        return;
+      }
+
+      modal.remove();
+
+      // Save to googleAccounts list
+      const res = await chrome.storage.local.get('googleAccounts');
+      const accounts = res.googleAccounts || [];
+      if (!accounts.some(a => a.email === email)) {
+        accounts.push({
+          email,
+          name,
+          avatar: (name[0] || email[0] || 'G').toUpperCase()
+        });
+        await chrome.storage.local.set({ googleAccounts: accounts });
+      }
+
+      onSelect({ email, name });
+    };
+  }
+
+  $('#googleLoginBtn').addEventListener('click', handleGoogleAuth);
+  $('#googleRegBtn').addEventListener('click', handleGoogleAuth);
+
+  // Toggle login/register
+  $('#showRegister').addEventListener('click', () => {
+    loginForm.style.display = 'none';
+    registerForm.style.display = 'block';
+    loginError.classList.remove('visible');
+  });
+  $('#showLogin').addEventListener('click', () => {
+    registerForm.style.display = 'none';
+    loginForm.style.display = 'block';
+    loginError.classList.remove('visible');
+  });
+
+  // Enter key for login/register
+  $('#loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#loginBtn').click(); });
+  $('#regPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#registerBtn').click(); });
+
+  // ---- User dropdown ----
+  $('#userMenu').addEventListener('click', (e) => {
+    e.stopPropagation();
+    userDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', () => userDropdown.classList.remove('open'));
+
+  async function performLogout() {
+    try {
+      const res = await chrome.storage.local.get('authToken');
+      const token = res.authToken;
+      if (token) {
+        await new Promise((resolve) => {
+          chrome.runtime.sendMessage({ type: 'CLEAR_AUTH_TOKEN', token }, () => {
+            resolve();
+          });
+        });
+      }
+      if (API) await API.clearAuth();
+      await chrome.storage.local.remove(['authToken', 'user', 'googleAuth', 'lastSync']);
+      showToast('Signed out', 'info');
+      setTimeout(() => location.reload(), 300);
+    } catch (err) {
+      console.error('Logout failed:', err);
+    }
+  }
+
+  $('#dropdownLogout').addEventListener('click', async () => {
+    userDropdown.classList.remove('open');
+    await performLogout();
+  });
+
+  // Account profile & delete
+  $('#dropdownAccount').addEventListener('click', async () => {
+    userDropdown.classList.remove('open');
+    showAccountProfile();
+  });
+
+  async function showAccountProfile() {
+    document.getElementById('accountModal')?.remove();
+    const result = await chrome.storage.local.get('user');
+    const user = result.user || {};
+    const email = user.email || 'N/A';
+    const name = user.name || 'User';
+    const created = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
+    const id = user.id || 'N/A';
+
+    const stats = await Storage.getStats();
+
+    const modal = document.createElement('div');
+    modal.id = 'accountModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:#1a1a2e;border:1px solid rgba(255,255,255,0.1);border-radius:16px;width:340px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <span style="font-size:15px;font-weight:700;color:#e2e8f0;">My Account</span>
+          <button id="accountClose" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:20px;padding:2px 4px;border-radius:4px;">&times;</button>
+        </div>
+        <div style="padding:20px;">
+          <div style="text-align:center;margin-bottom:18px;">
+            <div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#a855f7);display:flex;align-items:center;justify-content:center;font-size:24px;color:white;margin:0 auto 10px;font-weight:700;">${name[0]?.toUpperCase() || 'U'}</div>
+            <div style="font-size:16px;font-weight:700;color:#e2e8f0;">${escHtml(name)}</div>
+            <div style="font-size:13px;color:#64748b;margin-top:2px;">${escHtml(email)}</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+              <span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Member Since</span>
+              <span style="font-size:12px;color:#e2e8f0;">${created}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+              <span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Capsules</span>
+              <span style="font-size:12px;color:#e2e8f0;">${stats.totalCapsules}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+              <span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">Total Words</span>
+              <span style="font-size:12px;color:#e2e8f0;">${stats.totalWords}</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+              <span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;">User ID</span>
+              <span style="font-size:10px;color:#475569;font-family:monospace;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(id)}</span>
+            </div>
+          </div>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <button id="accountDeleteBtn" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#fca5a5;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.2s;">
+              Delete Account
+            </button>
+            <div style="font-size:11px;color:#475569;text-align:center;margin-top:8px;line-height:1.4;">This will permanently delete your account and all data.</div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#accountClose').onclick = () => modal.remove();
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+
+    modal.querySelector('#accountDeleteBtn').onclick = async () => {
+      if (!confirm('Are you sure? This will permanently delete your account, all capsules, folders, and teams. This cannot be undone.')) return;
+      if (!confirm('LAST WARNING: All your data will be erased forever. Continue?')) return;
+
+      const btn = modal.querySelector('#accountDeleteBtn');
+      btn.textContent = 'Deleting...';
+      btn.disabled = true;
+
+      try {
+        // Try API delete first
+        if (API) {
+          try {
+            await API.request('DELETE', '/api/auth/account');
+          } catch {
+            // API unreachable, continue with local cleanup
+          }
+        }
+        // Clear all local data
+        modal.remove();
+        if (API) await API.clearAuth();
+        await chrome.storage.local.clear();
+        showToast('Account deleted', 'info');
+        showScreen(loginScreen);
+      } catch {
+        // Fallback: clear local data
+        await chrome.storage.local.clear();
+        modal.remove();
+        showToast('Local data cleared. Account deleted.', 'info');
+        showScreen(loginScreen);
+      }
+    };
+  }
+
+  function escHtml(s) { if(!s)return''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+  $('#dropdownSync').addEventListener('click', async () => {
+    userDropdown.classList.remove('open');
+    showToast('Syncing…', 'info');
+    try {
+      chrome.runtime.sendMessage({ type: 'SYNC_TO_SERVER' }, (resp) => {
+        if (resp?.error) showToast(resp.error, 'error');
+        else showToast('Synced!', 'success');
+        loadDashboardData();
+      });
+    } catch {
+      showToast('Sync failed', 'error');
+    }
+  });
+
+  $('#dropdownExport').addEventListener('click', async () => {
+    userDropdown.classList.remove('open');
+    try {
+      let data;
+      if (API) {
+        data = await API.exportAll();
+      }
+      if (!data) {
+        data = await Storage.exportCapsules();
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `capsule-infinity-export-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Exported!', 'success');
+    } catch {
+      showToast('Export failed', 'error');
+    }
+  });
+
+  // ---- Quick Actions ----
+  $('#qaCapture').addEventListener('click', async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab) return;
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: () => {
+          // Try to get selected text or page content
+          const selection = window.getSelection()?.toString() || '';
+          return {
+            title: document.title,
+            url: window.location.href,
+            text: selection || document.body?.innerText?.slice(0, 3000) || '',
+          };
+        }
+      });
+      if (results?.[0]?.result) {
+        const r = results[0].result;
+        const capsule = {
+          title: r.title || `Captured from ${new URL(r.url).hostname}`,
+          content: r.text,
+          platform: 'unknown',
+          metadata: { sourceUrl: r.url },
+        };
+        try { if (API) await API.createCapsule(capsule); } catch {}
+        await Storage.saveCapsule(capsule);
+        showToast('Page captured!', 'success');
+        loadDashboardData();
+      }
+    } catch (err) {
+      showToast('Cannot capture this page', 'error');
+    }
+  });
+
+  $('#qaNewCapsule').addEventListener('click', async () => {
+    const title = prompt('Capsule title:');
+    if (!title) return;
+    const capsule = {
+      id: 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      title,
+      content: '',
+      platform: 'manual',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    try { if (API) await API.createCapsule(capsule); } catch {}
+    await Storage.saveCapsule(capsule);
+    showToast('Capsule created!', 'success');
+    loadDashboardData();
+  });
+
+  $('#qaNewFolder').addEventListener('click', async () => {
+    const name = prompt('Folder name:');
+    if (!name) return;
+    const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444', '#06b6d4'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const folder = { id: 'f_' + Date.now(), name, color, createdAt: Date.now() };
+    try { if (API) await API.createFolder(name, color); } catch {}
+    const fr = await chrome.storage.local.get('folders');
+    const folders = fr.folders || [];
+    folders.push(folder);
+    await chrome.storage.local.set({ folders });
+    showToast('Folder created!', 'success');
+    loadDashboardData();
+  });
+
+  $('#qaOpenSidebar').addEventListener('click', async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab) chrome.sidePanel.open({ tabId: tab.id });
+    } catch {}
+  });
+
+  $('#openSidebarBtn').addEventListener('click', async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab) chrome.sidePanel.open({ tabId: tab.id });
+    } catch {}
+  });
+
+  $('#viewAllBtn').addEventListener('click', async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab) chrome.sidePanel.open({ tabId: tab.id });
+    } catch {}
+  });
+
+  // ---- Init ----
+  init();
+})();

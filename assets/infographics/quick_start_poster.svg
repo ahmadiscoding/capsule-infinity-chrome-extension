@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="100%" height="100%">
+  <defs>
+    <rect id="bg" width="600" height="800" fill="#0b0b14"/>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+  </defs>
+
+  <use href="#bg"/>
+
+  <text x="300" y="60" text-anchor="middle" fill="#ffffff" font-family="system-ui, sans-serif" font-size="28" font-weight="900" letter-spacing="1">QUICK START GUIDE</text>
+  <text x="300" y="90" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="14" font-weight="500">Three steps to infinite context sharing</text>
+
+  <!-- Step 1 Card -->
+  <g transform="translate(50, 140)">
+    <rect width="500" height="180" rx="12" fill="#131322" stroke="url(#glow)" stroke-width="1.5" />
+    <text x="30" y="45" fill="#c084fc" font-family="system-ui, sans-serif" font-size="14" font-weight="800">STEP 1. SET DATABASE KEYS</text>
+    <text x="30" y="80" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">Open Settings (Cog icon) in your library panel. Input your</text>
+    <text x="30" y="100" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">Supabase URL &amp; Anon Key, then hit save. This maps all local</text>
+    <text x="30" y="120" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">sessions securely to your Postgres tables.</text>
+  </g>
+
+  <!-- Step 2 Card -->
+  <g transform="translate(50, 350)">
+    <rect width="500" height="180" rx="12" fill="#131322" stroke="url(#glow)" stroke-width="1.5" />
+    <text x="30" y="45" fill="#f472b6" font-family="system-ui, sans-serif" font-size="14" font-weight="800">STEP 2. CAPTURE CHATS</text>
+    <text x="30" y="80" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">Navigate to ChatGPT/Claude and click the floating</text>
+    <text x="30" y="100" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">"Capture" button. The extension will gather visible messages</text>
+    <text x="30" y="120" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">and format them with systemic prompt contexts.</text>
+  </g>
+
+  <!-- Step 3 Card -->
+  <g transform="translate(50, 560)">
+    <rect width="500" height="180" rx="12" fill="#131322" stroke="url(#glow)" stroke-width="1.5" />
+    <text x="30" y="45" fill="#3b82f6" font-family="system-ui, sans-serif" font-size="14" font-weight="800">STEP 3. COPY &amp; USE</text>
+    <text x="30" y="80" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">Open your side panel library list. Choose any capsule,</text>
+    <text x="30" y="100" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">click copy, and paste it into any another browser window</text>
+    <text x="30" y="120" fill="#e2e8f0" font-family="system-ui, sans-serif" font-size="13">or model interface to continue your workflow.</text>
+  </g>
+</svg>
