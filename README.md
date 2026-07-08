@@ -9,7 +9,6 @@
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
   [![Manifest Version: 3](https://img.shields.io/badge/Manifest-V3-purple.svg)](manifest.json)
   [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-  [![CI Status](https://github.com/your-username/capsule-infinity/workflows/CI%20Verification/badge.svg)](.github/workflows/lint_build.yml)
 </div>
 
 ---
@@ -101,18 +100,6 @@ Choose your preferred installation method:
 
 ---
 
-## 🚀 Quick Connection Start
-
-Configure your cloud sync database in 3 quick steps:
-
-![Quick Start Poster](assets/infographics/quick_start_poster.svg)
-
-1. Create a free project on [supabase.com](https://supabase.com).
-2. Run the queries inside **`supabase_schema.sql`** in the Supabase dashboard **SQL Editor** to build the database layout.
-3. Open the extension Settings tab, paste your **Supabase URL** and **Anon Key**, and click **Save**.
-
----
-
 ## 📂 Project Architecture
 
 ![Component Map](assets/diagrams/component_diagram.svg)
@@ -140,7 +127,7 @@ Configure your cloud sync database in 3 quick steps:
 ## ❓ FAQ
 
 #### Why does it show "Authorization page could not be loaded"?
-Ensure your Supabase project URL is correctly configured (e.g. `https://xxxx.supabase.co`) and that the redirect URL `https://<your-extension-id>.chromiumapp.org/` is whitelisted in your Supabase dashboard under **Authentication > URL Configuration**.
+As the extension owner, ensure that your users' Chrome Extension redirect URL (e.g. `https://<extension-id>.chromiumapp.org/`) is whitelisted in your Supabase project dashboard under **Authentication > URL Configuration**.
 
 #### Does it support Brave Browser?
 Yes! If Brave blocks the login popup, click the Brave Shield icon and set cookies to "Allow all cookies" or turn off shields for the auth page temporarily.
