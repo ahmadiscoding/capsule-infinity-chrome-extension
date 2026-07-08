@@ -7,7 +7,11 @@ importScripts('lib/supabase-js.js');
 let supabaseClient = null;
 
 async function getSupabaseClient() {
-  if (supabaseClient) return supabaseClient;
+  if (globalThis.supabaseInstance) return globalThis.supabaseInstance;
+  if (supabaseClient) {
+    globalThis.supabaseInstance = supabaseClient;
+    return supabaseClient;
+  }
   const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
   const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
   const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
@@ -25,6 +29,7 @@ async function getSupabaseClient() {
   }
   if (typeof supabase !== 'undefined' && supabase.createClient) {
     supabaseClient = supabase.createClient(cleanUrl, key);
+    globalThis.supabaseInstance = supabaseClient;
     if (res.supabaseSession) {
       try {
         await supabaseClient.auth.setSession(res.supabaseSession);
