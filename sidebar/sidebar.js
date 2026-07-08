@@ -665,7 +665,7 @@
       const settings = await chrome.storage.local.get(['supabaseUrl', 'user']);
       let loadedTeams = [];
       
-      if (settings.supabaseUrl && settings.user?.email) {
+      if (settings.user?.email) {
         // Query the cloud teams on load
         loadedTeams = await Storage.getCloudTeams(settings.user.email);
       } else {

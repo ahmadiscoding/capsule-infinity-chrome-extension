@@ -9,24 +9,27 @@ let supabaseClient = null;
 async function getSupabaseClient() {
   if (supabaseClient) return supabaseClient;
   const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
-  if (res.supabaseUrl && res.supabaseKey) {
-    let cleanUrl = res.supabaseUrl.trim().replace(/\/+$/, '');
-    if (cleanUrl.includes('saqruqtjinuslcxryuc') && !cleanUrl.includes('saqruqtjjinuslcxryuc')) {
-      cleanUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-      await chrome.storage.local.set({ supabaseUrl: cleanUrl });
-      console.log('[Auto-Correct] Background fixed Supabase URL typo: saqruqtjjinuslcxryuc');
-    }
-    if (!/^https?:\/\//i.test(cleanUrl)) {
-      cleanUrl = 'https://' + cleanUrl;
-    }
-    if (typeof supabase !== 'undefined' && supabase.createClient) {
-      supabaseClient = supabase.createClient(cleanUrl, res.supabaseKey);
-      if (res.supabaseSession) {
-        try {
-          await supabaseClient.auth.setSession(res.supabaseSession);
-        } catch (e) {
-          console.warn('[Background Supabase] Failed to restore session:', e);
-        }
+  const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
+  const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
+  
+  let cleanUrl = (res.supabaseUrl || defaultUrl).trim().replace(/\/+$/, '');
+  const key = res.supabaseKey || defaultKey;
+
+  if (cleanUrl.includes('saqruqtjinuslcxryuc') && !cleanUrl.includes('saqruqtjjinuslcxryuc')) {
+    cleanUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
+    await chrome.storage.local.set({ supabaseUrl: cleanUrl });
+    console.log('[Auto-Correct] Background fixed Supabase URL typo: saqruqtjjinuslcxryuc');
+  }
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    cleanUrl = 'https://' + cleanUrl;
+  }
+  if (typeof supabase !== 'undefined' && supabase.createClient) {
+    supabaseClient = supabase.createClient(cleanUrl, key);
+    if (res.supabaseSession) {
+      try {
+        await supabaseClient.auth.setSession(res.supabaseSession);
+      } catch (e) {
+        console.warn('[Background Supabase] Failed to restore session:', e);
       }
     }
   }
