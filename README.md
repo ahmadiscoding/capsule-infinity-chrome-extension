@@ -84,19 +84,48 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 
 ---
 
-## 📥 Installation
-
-Choose your preferred installation method:
-
-### Method 1: Chrome / Brave (Developer Mode)
+## 📥 Installation Guide
 
 ![Installation Infographic](source/assets/infographics/installation_infographic.svg)
 
-1. **Download source ZIP** from this repository (or clone it: `git clone https://github.com/your-username/capsule-infinity.git`).
-2. Go to **`chrome://extensions/`** or **`brave://extensions/`** in your browser.
-3. Toggle the **Developer mode** switch in the top-right corner to **ON**.
+### Option 1 (Recommended): Download ZIP
+
+1. Open this [GitHub Repository](https://github.com/ahmadiscoding/capsule-infinity-chrome-extension) in your browser.
+2. Click the green **Code** button in the top right.
+3. Select **Download ZIP** from the dropdown menu.
+4. Extract the downloaded ZIP file to any folder on your computer.
+   * *Note: Make sure to extract the files! Chrome cannot load extensions directly from inside a compressed ZIP file.*
+
+### Option 2: Clone with Git
+
+If you prefer using the command line, run this clone command in your terminal:
+
+```bash
+git clone https://github.com/ahmadiscoding/capsule-infinity.git
+```
+
+---
+
+### Load the Extension into Chrome or Brave
+
+1. Open your Google Chrome or Brave browser.
+2. Navigate to the extensions page by typing the following in the URL bar and pressing Enter:
+   * **Chrome**: `chrome://extensions/`
+   * **Brave**: `brave://extensions/`
+3. Turn **Developer mode** **ON** using the toggle switch in the top-right corner.
+   > 💡 **Developer Mode**: This allows your browser to run local extension files that aren't downloaded from the official Chrome Web Store.
 4. Click the **Load unpacked** button in the top-left corner.
-5. Select the unzipped **`source`** folder containing `manifest.json`.
+5. In the window that pops up, navigate to your extracted project folder and select the **`source`** folder (which contains the `manifest.json` file).
+6. Click **Select Folder**.
+
+### ✅ You're Done! 🎉
+
+The **Capsule Infinity** extension is now active! You should see its icon in your browser toolbar.
+
+**If the icon does not appear on your toolbar:**
+1. Click the **Extensions (🧩)** puzzle icon in the top-right corner of your browser.
+2. Find **Capsule Infinity** in the list.
+3. Click the **Pin (📌)** icon next to it to lock it to your toolbar for quick access.
 
 ---
 
