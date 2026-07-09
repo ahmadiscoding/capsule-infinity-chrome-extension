@@ -91,7 +91,7 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 ### Option 1 (Recommended): Download ZIP
 
 1. Open this [GitHub Repository](https://github.com/ahmadiscoding/capsule-infinity-chrome-extension) in your browser.
-2. Click the green **Code** button in the top right.
+2. Click the **Code** button in the top right.
 3. Select **Download ZIP** from the dropdown menu.
 4. Extract the downloaded ZIP file to any folder on your computer.
    * *Note: Make sure to extract the files! Chrome cannot load extensions directly from inside a compressed ZIP file.*
