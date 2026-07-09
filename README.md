@@ -101,7 +101,7 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 If you prefer using the command line, run this clone command in your terminal:
 
 ```bash
-git clone https://github.com/ahmadiscoding/capsule-infinity.git
+git clone https://github.com/ahmadiscoding/capsule-infinity-chrome-extension.git
 ```
 
 ---
