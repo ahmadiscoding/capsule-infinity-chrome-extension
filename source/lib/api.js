@@ -8,31 +8,11 @@ const CapsuleAPI = {
   baseUrl: '',
 
   async getSupabaseClient() {
-    if (globalThis.supabaseInstance) return globalThis.supabaseInstance;
-
-    const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
-    const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-    const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
-    
-    let cleanUrl = (res.supabaseUrl || defaultUrl).trim().replace(/\/+$/, '');
-    const key = res.supabaseKey || defaultKey;
-
-    if (cleanUrl.includes('saqruqtjinuslcxryuc') && !cleanUrl.includes('saqruqtjjinuslcxryuc')) {
-      cleanUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
+    if (typeof window !== 'undefined' && window.SupabaseClient) {
+      return await window.SupabaseClient.ensureInitialized();
     }
-    if (!/^https?:\/\//i.test(cleanUrl)) {
-      cleanUrl = 'https://' + cleanUrl;
-    }
-    if (typeof supabase !== 'undefined' && supabase.createClient) {
-      globalThis.supabaseInstance = supabase.createClient(cleanUrl, key);
-      if (res.supabaseSession) {
-        try {
-          await globalThis.supabaseInstance.auth.setSession(res.supabaseSession);
-        } catch (e) {
-          console.warn('[API Supabase] Failed to set session:', e);
-        }
-      }
-      return globalThis.supabaseInstance;
+    if (typeof self !== 'undefined' && self.SupabaseClient) {
+      return await self.SupabaseClient.ensureInitialized();
     }
     return null;
   },

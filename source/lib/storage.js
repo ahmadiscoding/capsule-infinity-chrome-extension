@@ -7,37 +7,15 @@ const CapsuleStorage = {
 
   // Helper to initialize and return the Supabase Client singleton
   async initSupabase() {
-    if (globalThis.supabaseInstance) {
-      this.supabase = globalThis.supabaseInstance;
+    if (typeof window !== 'undefined' && window.SupabaseClient) {
+      this.supabase = await window.SupabaseClient.ensureInitialized();
       return this.supabase;
     }
-
-    const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
-    const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-    const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
-    
-    let cleanUrl = (res.supabaseUrl || defaultUrl).trim().replace(/\/+$/, '');
-    const key = res.supabaseKey || defaultKey;
-
-    if (cleanUrl.includes('saqruqtjinuslcxryuc') && !cleanUrl.includes('saqruqtjjinuslcxryuc')) {
-      cleanUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-      await chrome.storage.local.set({ supabaseUrl: cleanUrl });
+    if (typeof self !== 'undefined' && self.SupabaseClient) {
+      this.supabase = await self.SupabaseClient.ensureInitialized();
+      return this.supabase;
     }
-    if (!/^https?:\/\//i.test(cleanUrl)) {
-      cleanUrl = 'https://' + cleanUrl;
-    }
-    if (typeof supabase !== 'undefined' && supabase.createClient) {
-      globalThis.supabaseInstance = supabase.createClient(cleanUrl, key);
-      this.supabase = globalThis.supabaseInstance;
-      if (res.supabaseSession) {
-        try {
-          await this.supabase.auth.setSession(res.supabaseSession);
-        } catch (e) {
-          console.warn('[Storage Supabase] Failed to set session:', e);
-        }
-      }
-    }
-    return this.supabase;
+    return null;
   },
 
   // Helper for Supabase REST API calls (legacy fallback)
@@ -73,25 +51,27 @@ const CapsuleStorage = {
 
 
   async getCloudTeams(email) {
-    // Teams feature is moved to a future release milestone. Returning a clean, empty array immediately.
-    /*
+    const sb = await this.initSupabase();
+    if (!sb) return [];
+
     try {
-      const sb = await this.initSupabase();
-      if (sb) {
-        const { data, error } = await sb.from('teams').select('*').contains('user_emails', [email]);
-        if (error) throw error;
-        return data || [];
-      } else {
-        const path = `/teams?user_emails=cs.{${encodeURIComponent(`"${email}"`)}}`;
-        const teams = await this.supabaseFetch('GET', path);
-        return teams || [];
-      }
+      // Use the shared client's getUser method
+      const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
+      const user = client ? await client.getUser() : null;
+      if (!user) return [];
+
+      // Query teams where user is a member
+      const { data, error } = await sb
+        .from('teams')
+        .select('*')
+        .contains('user_emails', [email]);
+
+      if (error) throw error;
+      return data || [];
     } catch (e) {
-      console.error('[Storage] Supabase getCloudTeams failed:', JSON.stringify(e) || e);
+      console.error('[Storage] Supabase getCloudTeams failed:', e);
       return [];
     }
-    */
-    return [];
   },
 
   async getAllCapsules() {
@@ -203,10 +183,10 @@ const CapsuleStorage = {
     }
 
     // Generate valid UUID if missing or formatted as cap_
-    const uuid = (capsule.id && capsule.id.length === 36 && !capsule.id.includes('cap_')) 
-      ? capsule.id 
+    const uuid = (capsule.id && capsule.id.length === 36 && !capsule.id.includes('cap_'))
+      ? capsule.id
       : (self.crypto?.randomUUID ? self.crypto.randomUUID() : '3ecf8f74-7e8e-4f36-9b6f-' + Math.random().toString(16).substring(2, 14));
-    
+
     capsule.id = uuid;
     capsule.metadata = capsule.metadata || {};
     capsule.metadata.createdAt = capsule.metadata.createdAt || Date.now();
@@ -218,12 +198,12 @@ const CapsuleStorage = {
       try {
         let userId = null;
         try {
-          const { data: { session } } = await sb.auth.getSession();
-          if (session?.user?.id) {
-            userId = session.user.id;
-          }
+          // Use the shared SupabaseClient's getUser method
+          const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
+          const user = client ? await client.getUser() : null;
+          if (user?.id) userId = user.id;
         } catch (authErr) {
-          console.warn('[Storage] Supabase getSession failed, trying fallback:', authErr);
+          console.warn('[Storage] Supabase getUser failed, trying fallback:', authErr);
         }
 
         if (!userId) {
@@ -236,10 +216,10 @@ const CapsuleStorage = {
         if (!userId) {
           throw new Error("Authentication Error: You must be signed in to save capsules.");
         }
-        
+
         const dbObj = {
           id: uuid,
-          user_id: userId, // Use session userId or local fallback ID
+          user_id: userId,
           title: capsule.title || 'Untitled',
           content: JSON.stringify({
             content: capsule.content || '',
@@ -271,7 +251,7 @@ const CapsuleStorage = {
         }
       } catch (e) {
         console.error('[Storage] Supabase save capsule failed:', e);
-        throw e; // Propagate the error so the UI script can toast it
+        throw e;
       }
     }
 

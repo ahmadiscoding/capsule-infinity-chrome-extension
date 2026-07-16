@@ -11,7 +11,8 @@
     "contextMenus",
     "unlimitedStorage",
     "identity",
-    "identity.email"
+    "identity.email",
+    "scripting"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",
@@ -107,5 +108,8 @@
       "resources": ["assets/*", "shared/*"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'"
+  }
 }

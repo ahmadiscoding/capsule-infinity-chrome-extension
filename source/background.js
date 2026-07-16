@@ -10,44 +10,7 @@ console.warn = function(...args) {
   originalWarn.apply(console, args);
 };
 
-importScripts('lib/supabase-js.js');
-
-let supabaseClient = null;
-
-async function getSupabaseClient() {
-  if (globalThis.supabaseInstance) return globalThis.supabaseInstance;
-  if (supabaseClient) {
-    globalThis.supabaseInstance = supabaseClient;
-    return supabaseClient;
-  }
-  const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
-  const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-  const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
-  
-  let cleanUrl = (res.supabaseUrl || defaultUrl).trim().replace(/\/+$/, '');
-  const key = res.supabaseKey || defaultKey;
-
-  if (cleanUrl.includes('saqruqtjinuslcxryuc') && !cleanUrl.includes('saqruqtjjinuslcxryuc')) {
-    cleanUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-    await chrome.storage.local.set({ supabaseUrl: cleanUrl });
-    console.log('[Auto-Correct] Background fixed Supabase URL typo: saqruqtjjinuslcxryuc');
-  }
-  if (!/^https?:\/\//i.test(cleanUrl)) {
-    cleanUrl = 'https://' + cleanUrl;
-  }
-  if (typeof supabase !== 'undefined' && supabase.createClient) {
-    supabaseClient = supabase.createClient(cleanUrl, key);
-    globalThis.supabaseInstance = supabaseClient;
-    if (res.supabaseSession) {
-      try {
-        await supabaseClient.auth.setSession(res.supabaseSession);
-      } catch (e) {
-        console.warn('[Background Supabase] Failed to restore session:', e);
-      }
-    }
-  }
-  return supabaseClient;
-}
+importScripts('lib/supabase-js.js', 'lib/supabase-client.js');
 
 // Open side panel
 chrome.action.onClicked.addListener((tab) => {
@@ -155,7 +118,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Perform save & Supabase sync inside background worker
       (async () => {
         const res = await chrome.storage.local.get(['capsules']);
-        const sb = await getSupabaseClient();
+        const sb = await SupabaseClient.ensureInitialized();
         if (sb) {
           try {
             let userId = null;
@@ -176,7 +139,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
 
             if (!userId) throw new Error('No user session found for database sync');
-            
+
             const dbObj = {
               id: uuid,
               user_id: userId, // Explicit user_id column complying with RLS or fallback ID
@@ -221,29 +184,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         try {
           const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'googleClientId']);
-          const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-          const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
-          
+
           let token = null;
           let refreshToken = null;
           let userObj = null;
 
-          const url = res.supabaseUrl || defaultUrl;
-          const key = res.supabaseKey || defaultKey;
-
-          if (url && key) {
-            // Sanitize Supabase URL (strip trailing slashes, ensure protocol is present)
-            let cleanUrl = url.trim().replace(/\/+$/, '');
-            if (cleanUrl.includes('saqruqtjinuslcxryuc') && !cleanUrl.includes('saqruqtjjinuslcxryuc')) {
-              cleanUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-              await chrome.storage.local.set({ supabaseUrl: cleanUrl });
-              console.log('[Auto-Correct] Background fixed Supabase URL typo during OAuth initiate: saqruqtjjinuslcxryuc');
-            }
-            if (!/^https?:\/\//i.test(cleanUrl)) {
-              cleanUrl = 'https://' + cleanUrl;
-            }
-
-            const sb = supabase.createClient(cleanUrl, key);
+          const sb = await SupabaseClient.ensureInitialized();
+          if (sb) {
             const redirectUrl = chrome.identity.getRedirectURL();
 
             // Initiate Supabase OAuth to get the raw authorization URL
@@ -394,30 +341,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const { token } = message;
       (async () => {
         try {
-          if (supabaseClient) {
-            try {
-              await supabaseClient.auth.signOut();
-            } catch (e) {
-              console.warn('[Background Logout] error signing out of Supabase:', e);
-            }
-            supabaseClient = null;
-            globalThis.supabaseInstance = null;
-          }
-          await chrome.storage.local.remove(['supabaseSession']);
-
-          if (chrome.identity && chrome.identity.removeCachedAuthToken) {
-            const tokenToClear = token || (await chrome.storage.local.get('authToken')).authToken;
-            if (tokenToClear) {
-              await new Promise((resolve) => {
-                chrome.identity.removeCachedAuthToken({ token: tokenToClear }, () => {
-                  if (chrome.runtime.lastError) {
-                    console.warn('[Background Logout] error clearing token:', chrome.runtime.lastError.message);
-                  }
-                  resolve();
-                });
-              });
-            }
-          }
+          await SupabaseClient.signOut();
           sendResponse({ success: true });
         } catch (err) {
           sendResponse({ error: err.message });
@@ -430,9 +354,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const { to, teamName, inviteCode, creatorEmail } = message;
       const subject = `Invite to join Capsule Infinity team: ${teamName}`;
       const body = `Hi,\n\nI have invited you to join my Capsule Infinity team "${teamName}".\n\nTo accept and confirm this invite, open the Capsule Infinity extension, click "Join Team", and enter this invite code:\n\n${inviteCode}\n\nThis invite code is valid for 5 minutes.\n\nBest regards,\n${creatorEmail}`;
-      
-      const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}&ci_auto_send=true`;
-      
+
+      const composeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
       chrome.tabs.create({ url: composeUrl, active: false }, (tab) => {
         sendResponse({ success: true, tabId: tab?.id });
       });
@@ -482,18 +406,35 @@ function detectPlatform(url) {
 }
 
 // Auto-sync every 5 minutes
-setInterval(async () => {
-  const result = await chrome.storage.local.get(['settings', 'authToken']);
-  if (result.settings?.autoSync && result.authToken) {
-    try { await syncToServer(); } catch {}
-  }
-}, 300000);
+let syncIntervalId = null;
+
+chrome.runtime.onStartup.addListener(() => {
+  startAutoSync();
+});
+
+chrome.runtime.onInstalled.addListener(() => {
+  startAutoSync();
+});
+
+function startAutoSync() {
+  if (syncIntervalId) clearInterval(syncIntervalId);
+  syncIntervalId = setInterval(async () => {
+    const result = await chrome.storage.local.get(['settings', 'authToken']);
+    if (result.settings?.autoSync && result.authToken) {
+      try { await syncToServer(); } catch {}
+    }
+  }, 300000);
+}
+
+chrome.runtime.onSuspend.addListener(() => {
+  if (syncIntervalId) clearInterval(syncIntervalId);
+});
 
 async function syncToServer() {
   const result = await chrome.storage.local.get(['authToken', 'capsules', 'lastSync', 'supabaseUrl', 'supabaseKey', 'user']);
   const user = result.user;
 
-  const sb = await getSupabaseClient();
+  const sb = await SupabaseClient.ensureInitialized();
   if (sb && user) {
     const capsules = result.capsules || [];
     const since = result.lastSync || 0;
@@ -503,10 +444,10 @@ async function syncToServer() {
     let successCount = 0;
     for (const capsule of toSync) {
       try {
-        const uuid = (capsule.id && capsule.id.length === 36 && !capsule.id.includes('cap_')) 
-          ? capsule.id 
+        const uuid = (capsule.id && capsule.id.length === 36 && !capsule.id.includes('cap_'))
+          ? capsule.id
           : (self.crypto?.randomUUID ? self.crypto.randomUUID() : '3ecf8f74-7e8e-4f36-9b6f-' + Math.random().toString(16).substring(2, 14));
-        
+
         capsule.id = uuid;
 
         const dbObj = {
@@ -566,7 +507,7 @@ async function syncFromServer() {
   const result = await chrome.storage.local.get(['authToken', 'supabaseUrl', 'supabaseKey', 'user']);
   const user = result.user;
 
-  const sb = await getSupabaseClient();
+  const sb = await SupabaseClient.ensureInitialized();
   if (sb && user) {
     try {
       const { data, error } = await sb

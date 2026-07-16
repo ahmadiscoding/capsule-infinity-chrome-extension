@@ -72,15 +72,6 @@ console.warn = function(...args) {
   }
 
   async function init() {
-    // Auto-correct Supabase URL typo if present
-    const settingsStore = await chrome.storage.local.get(['supabaseUrl']);
-    if (settingsStore.supabaseUrl && settingsStore.supabaseUrl.includes('saqruqtjinuslcxryuc')) {
-      if (!settingsStore.supabaseUrl.includes('saqruqtjjinuslcxryuc')) {
-        await chrome.storage.local.set({ supabaseUrl: 'https://saqruqtjjinuslcxryuc.supabase.co' });
-        console.log('[Auto-Correct] Fixed Supabase URL typo: saqruqtjjinuslcxryuc');
-      }
-    }
-
     // Configure API
     if (API) await API.configure();
 
