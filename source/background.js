@@ -123,8 +123,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           try {
             let userId = null;
             try {
-              const { data: { user }, error: userError } = await sb.auth.getUser();
-              if (!userError && user?.id) {
+              const user = await SupabaseClient.getUser();
+              if (user?.id) {
                 userId = user.id;
               }
             } catch (authErr) {

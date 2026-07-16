@@ -86,6 +86,10 @@ const SupabaseClient = {
   async getUser() {
     if (!this.instance) await this.init();
     if (!this.instance) return null;
+    try {
+      const { data: { session } } = await this.instance.auth.getSession();
+      if (session?.user) return session.user;
+    } catch {}
     const { data: { user } } = await this.instance.auth.getUser();
     return user;
   },
