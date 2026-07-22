@@ -32,7 +32,7 @@ const CapsuleCompressor = {
   },
 
   /**
-   * Clean text by stripping conversational fluff, labels, and file trippers
+   * Stage 1: Conversation Cleaner (Deterministic Preprocessing)
    */
   cleanText(text) {
     if (!text) return '';
@@ -43,7 +43,50 @@ const CapsuleCompressor = {
       cleaned = cleaned.replace(pattern, '');
     }
 
-    // 2. Strip conversational labels and fluff
+    // 2. Truncate stack traces and logs exceeding 10 lines
+    const lines = cleaned.split('\n');
+    let logCount = 0;
+    const filteredLines = [];
+    for (const line of lines) {
+      const isLogLine = line.includes('at ') || line.includes('Error:') || line.includes('    at ') || line.includes('stack');
+      if (isLogLine) {
+        logCount++;
+        if (logCount <= 10) {
+          filteredLines.push(line);
+        }
+      } else {
+        logCount = 0;
+        filteredLines.push(line);
+      }
+    }
+    cleaned = filteredLines.join('\n');
+
+    // 3. Strip raw markdown code blocks but leave functional summaries
+    cleaned = cleaned.replace(/```[a-zA-Z0-9_+-]*\n([\s\S]*?)```/g, (match, code) => {
+      const codeLines = code.trim().split('\n');
+      const signatures = codeLines.filter(l => 
+        l.includes('function ') || l.includes('class ') || l.includes('const ') || 
+        l.includes('let ') || l.includes('import ') || l.includes('export ')
+      );
+      return signatures.slice(0, 10).join('\n');
+    });
+
+    // 4. Strip boilerplate meta-prompts
+    const boilerplate = [
+      /Copy this prompt/gi,
+      /Here is the revised code:/gi,
+      /As an AI language model/gi,
+      /Does this make sense/gi,
+      /Hope this helps/gi,
+      /feel free to ask/gi,
+      /thank you/gi,
+      /thanks/gi
+    ];
+    for (const pattern of boilerplate) {
+      cleaned = cleaned.replace(pattern, '');
+    }
+
+    // 5. Clean conversational labels
     for (const pattern of this.FLUFF_PATTERNS) {
       cleaned = cleaned.replace(pattern, '').trim();
     }
@@ -52,7 +95,48 @@ const CapsuleCompressor = {
   },
 
   /**
-   * Extract code knowledge from text block (filename, purpose, major functions, dependencies)
+   * Safe JSON Mutation Payload Parser (Fallback & Regex-based)
+   */
+  parseJsonPayload(rawResponse) {
+    if (!rawResponse) return null;
+    let cleaned = rawResponse.trim();
+
+    // Strip markdown code fences
+    cleaned = cleaned.replace(/```(?:json)?\n([\s\S]*?)\n```/g, '$1');
+    cleaned = cleaned.replace(/```/g, '').trim();
+
+    try {
+      return JSON.parse(cleaned);
+    } catch (e) {
+      // Fallback: search for first '{' and last '}'
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const candidate = cleaned.slice(firstBrace, lastBrace + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch (innerErr) {
+          console.warn('[Parser Fallback] Regex JSON object extraction failed:', innerErr);
+        }
+      }
+
+      // Fallback: search for first '[' and last ']'
+      const firstBracket = cleaned.indexOf('[');
+      const lastBracket = cleaned.lastIndexOf(']');
+      if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+        const candidate = cleaned.slice(firstBracket, lastBracket + 1);
+        try {
+          return JSON.parse(candidate);
+        } catch (innerErr) {
+          console.warn('[Parser Fallback] Regex JSON array extraction failed:', innerErr);
+        }
+      }
+    }
+    return null;
+  },
+
+  /**
+   * Extract code knowledge from text block
    */
   extractCodeKnowledge(text) {
     const blocks = [];
@@ -68,7 +152,6 @@ const CapsuleCompressor = {
       let functions = [];
       let dependencies = [];
 
-      // Deduce name and purpose from path comments
       if (firstLine.includes('/') || firstLine.includes('\\') || firstLine.includes('.')) {
         filename = firstLine.replace(/[\/\*#=\s]/g, '').trim();
       }
@@ -79,7 +162,6 @@ const CapsuleCompressor = {
         dependencies = ['Apple Sequoia UI theme specification'];
       } else if (lang === 'javascript' || lang === 'js') {
         purpose = 'Provide execution logic and API interfaces';
-        // Extract function signatures
         const fnRegex = /(?:async\s+)?function\s+([a-zA-Z0-9_]+)\s*\(|([a-zA-Z0-9_]+)\s*:\s*(?:async\s+)?function\s*\(|const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async\s+)?\(/g;
         let fnMatch;
         while ((fnMatch = fnRegex.exec(code)) !== null) {
@@ -89,7 +171,6 @@ const CapsuleCompressor = {
           }
         }
         
-        // Extract dependencies (imports or API configuration)
         if (code.includes('chrome.storage')) dependencies.push('chrome.storage');
         if (code.includes('chrome.runtime')) dependencies.push('chrome.runtime');
         if (code.includes('supabase')) dependencies.push('Supabase Client SDK');
