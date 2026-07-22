@@ -138,53 +138,98 @@ const CapsuleCompressor = {
   /**
    * Extract mutations from cleaned text deterministically
    */
-  extractMutations(cleanedText) {
+  extractMutations(cleanedText, firstUserMsg = '') {
     const mutations = [];
     if (!cleanedText) return mutations;
 
-    const lines = cleanedText.split('\n');
+    const goalFallback = (firstUserMsg || cleanedText).split('\n')[0].trim().substring(0, 80);
+    const lines = cleanedText.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+    const addedSentences = new Set();
+
     lines.forEach(line => {
+      const lower = line.toLowerCase();
+      
+      if (line.includes('function ') || line.includes('class ') || line.includes('const ') || line.includes('import ')) {
+        return;
+      }
+
       const parts = line.split(':');
-      if (parts.length >= 2) {
+      if (parts.length >= 2 && ['decision', 'preference', 'constraint', 'todo', 'bug', 'problem', 'solution'].includes(parts[0].trim().toLowerCase())) {
         const key = parts[0].trim().toLowerCase();
         const value = parts.slice(1).join(':').trim();
         
-        if (['decision', 'preference', 'constraint', 'todo', 'bug', 'problem', 'solution'].includes(key)) {
-          let type = 'preference';
-          let action = 'UPSERT';
-          let idAttr = key;
-          
-          if (key === 'decision') type = 'decision';
-          else if (key === 'constraint') type = 'constraint';
-          else if (key === 'todo') type = 'todo';
-          else if (key === 'bug' || key === 'problem') type = 'bug';
-          else if (key === 'solution') {
-            type = 'bug';
-            action = 'RESOLVE';
-          }
-          
-          // Lowercase slugified ID
-          const id = `${type}.${value.substring(0, 30).toLowerCase().replace(/[^a-z0-9]/g, '.')}`;
-          
-          mutations.push({
-            action,
-            type,
-            id,
-            attributes: { [key]: value },
-            confidence: 0.95
-          });
+        let type = 'preference';
+        let action = 'UPSERT';
+        if (key === 'decision') type = 'decision';
+        else if (key === 'constraint') type = 'constraint';
+        else if (key === 'todo') type = 'todo';
+        else if (key === 'bug' || key === 'problem') type = 'bug';
+        else if (key === 'solution') {
+          type = 'bug';
+          action = 'RESOLVE';
         }
+        
+        const id = `${type}.${value.substring(0, 30).toLowerCase().replace(/[^a-z0-9]/g, '.')}`;
+        mutations.push({
+          action,
+          type,
+          id,
+          attributes: { [key]: value },
+          confidence: 0.95
+        });
+        return;
+      }
+
+      let type = null;
+      let attrKey = '';
+      
+      if (lower.includes('todo') || lower.includes('pending') || lower.includes('next step') || lower.includes('task') || lower.includes('need to')) {
+        type = 'todo';
+        attrKey = 'task';
+      } else if (lower.includes('bug') || lower.includes('error') || lower.includes('fail') || lower.includes('issue') || lower.includes('blocker')) {
+        type = 'bug';
+        attrKey = 'blocker';
+      } else if (lower.includes('decide') || lower.includes('choose') || lower.includes('chose') || lower.includes('implement') || lower.includes('prefer') || lower.includes('switch') || lower.includes('adopt')) {
+        type = 'decision';
+        attrKey = 'decision';
+      } else if (lower.includes('must ') || lower.includes('restrict') || lower.includes('limit') || lower.includes('constraint') || lower.includes('rule') || lower.includes('framework') || lower.includes('library') || lower.includes('stack') || lower.includes('api')) {
+        type = 'constraint';
+        attrKey = 'constraint';
+      }
+
+      if (type && !addedSentences.has(lower)) {
+        addedSentences.add(lower);
+        const cleanVal = line.replace(/^[-*•\d.]+\s*/, '').trim();
+        const id = `${type}.${cleanVal.substring(0, 30).toLowerCase().replace(/[^a-z0-9]/g, '.')}`;
+        mutations.push({
+          action: 'UPSERT',
+          type,
+          id,
+          attributes: { [attrKey]: cleanVal },
+          confidence: 0.85
+        });
       }
     });
 
-    // Provide default mutations if none were found
     if (mutations.length === 0) {
       mutations.push({
         action: 'UPSERT',
-        type: 'decision',
-        id: 'decision.tech_stack',
-        attributes: { technologies: 'Chrome Extension MV3, Vanilla JS, CSS HSL Variable Variables, Supabase Cloud' },
-        confidence: 1.0
+        type: 'todo',
+        id: 'todo.conversation_goal',
+        attributes: { goal: goalFallback || 'Explore conversation context' },
+        confidence: 0.90
+      });
+
+      const firstLines = lines.slice(0, 3);
+      firstLines.forEach((line, idx) => {
+        const cleanVal = line.replace(/^[-*•\d.]+\s*/, '').trim();
+        mutations.push({
+          action: 'UPSERT',
+          type: idx === 0 ? 'decision' : 'constraint',
+          id: `general.context_${idx}`,
+          attributes: { detail: cleanVal },
+          confidence: 0.80
+        });
       });
     }
 
@@ -313,14 +358,17 @@ const CapsuleCompressor = {
    */
   compressToJSON(rawInput, options = {}) {
     let rawText = '';
+    let firstUserMsg = '';
     if (Array.isArray(rawInput)) {
       rawText = rawInput.map(m => m.content).join('\n\n');
+      const userMsg = rawInput.find(m => m.role === 'user');
+      if (userMsg) firstUserMsg = userMsg.content;
     } else {
       rawText = String(rawInput);
     }
 
     const cleaned = this.cleanText(rawText);
-    const mutations = this.extractMutations(cleaned);
+    const mutations = this.extractMutations(cleaned, firstUserMsg);
     const existingEntities = options.existingEntities || [];
     const updatedEntities = this.applyMutations(existingEntities, mutations);
 
@@ -366,12 +414,11 @@ const ContextComposer = {
   compose(entities) {
     let markdown = `# 🧠 CAPSULE CONTEXT (v2.1)\n\n`;
 
-    // Filter active items
     const activeEntities = entities.filter(e => !['RESOLVED', 'DEPRECATED'].includes(e.status));
 
     // 1. Goal
-    const goalEntity = activeEntities.find(e => e.type === 'todo' || (e.attributes && e.attributes.goal));
-    const goalText = goalEntity ? (goalEntity.attributes.goal || Object.values(goalEntity.attributes)[0]) : 'Build reliable context-saving Chrome extension';
+    const goalEntity = activeEntities.find(e => e.type === 'todo' && (e.attributes.goal || e.attributes.task));
+    const goalText = goalEntity ? (goalEntity.attributes.goal || goalEntity.attributes.task) : 'Explore conversation context';
     markdown += `## 🎯 Current Goal\n- ${goalText}\n\n`;
 
     // 2. Technical Context & Constraints
@@ -383,9 +430,7 @@ const ContextComposer = {
         markdown += `- ${val}\n`;
       });
     } else {
-      markdown += `- Chrome Extension Manifest V3 execution rules\n`;
-      markdown += `- 50KB background message transfer size limits\n`;
-      markdown += `- Local-first cache resilience\n`;
+      markdown += `- General information exchange and research guidance\n`;
     }
     markdown += `\n`;
 
@@ -398,21 +443,26 @@ const ContextComposer = {
         markdown += `- ${val}\n`;
       });
     } else {
-      markdown += `- Implemented deep clone DOM sanitization to bypass Windows file dialog triggers\n`;
-      markdown += `- Configured unified Supabase client singleton to prevent multiple GoTrueClient warnings\n`;
+      markdown += `- Gather roadmap details and key learning concepts\n`;
     }
     markdown += `\n`;
 
     // 4. Pending Tasks & Known Blockers
-    const todos = activeEntities.filter(e => e.type === 'todo');
+    const todos = activeEntities.filter(e => e.type === 'todo' && e.id !== 'todo.conversation_goal');
+    const bugs = activeEntities.filter(e => e.type === 'bug');
     markdown += `## 📋 Pending Tasks & Known Blockers\n`;
-    if (todos.length > 0) {
+    
+    if (todos.length > 0 || bugs.length > 0) {
       todos.forEach(t => {
         const val = Object.values(t.attributes)[0];
-        markdown += `- ${val}\n`;
+        markdown += `- Pending: ${val}\n`;
+      });
+      bugs.forEach(b => {
+        const val = Object.values(b.attributes)[0];
+        markdown += `- Blocker: ${val}\n`;
       });
     } else {
-      markdown += `- Verify background service worker session caching behavior on system restarts\n`;
+      markdown += `- Synthesize AI guidance into structured learning track\n`;
     }
     markdown += `\n`;
 
