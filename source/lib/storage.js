@@ -182,10 +182,9 @@ const CapsuleStorage = {
       throw new Error("Extension reloaded. Please refresh the page to save.");
     }
 
-    // Generate valid UUID if missing or formatted as cap_
     const uuid = (capsule.id && capsule.id.length === 36 && !capsule.id.includes('cap_'))
       ? capsule.id
-      : (self.crypto?.randomUUID ? self.crypto.randomUUID() : '3ecf8f74-7e8e-4f36-9b6f-' + Math.random().toString(16).substring(2, 14));
+      : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }));
 
     capsule.id = uuid;
     capsule.metadata = capsule.metadata || {};

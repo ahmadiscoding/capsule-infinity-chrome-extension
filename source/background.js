@@ -103,7 +103,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       const fullContent = transfer.chunks.join('');
-      const uuid = self.crypto?.randomUUID ? self.crypto.randomUUID() : '3ecf8f74-7e8e-4f36-9b6f-' + Math.random().toString(16).substring(2, 14);
+      const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); });
       const capsule = {
         ...transfer.metadata,
         content: fullContent,
@@ -159,7 +159,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const { error: insertError } = await sb.from('capsules').upsert(dbObj);
             if (insertError) throw insertError;
           } catch (e) {
-            console.error('[Background Chunk Save] Supabase sync failed:', e);
+            console.error('[Background Chunk Save] Supabase sync failed:', e.message || e.details || JSON.stringify(e));
           }
         }
 
@@ -446,7 +446,7 @@ async function syncToServer() {
       try {
         const uuid = (capsule.id && capsule.id.length === 36 && !capsule.id.includes('cap_'))
           ? capsule.id
-          : (self.crypto?.randomUUID ? self.crypto.randomUUID() : '3ecf8f74-7e8e-4f36-9b6f-' + Math.random().toString(16).substring(2, 14));
+          : ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16); }));
 
         capsule.id = uuid;
 
