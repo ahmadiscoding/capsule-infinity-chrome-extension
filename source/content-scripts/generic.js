@@ -41,6 +41,7 @@
   let dialogueObserver = null;
   let injectAttempts = 0;
   const MAX_INJECT_ATTEMPTS = 50;
+  let currentCapture = null;
 
   // ============================================================
   // FIND THE INPUT/DIALOGUE BOX — Platform-specific selectors
@@ -445,11 +446,11 @@
     if (!el) return '';
     try {
       const clone = el.cloneNode(true);
-      clone.querySelectorAll('input, [type="file"], img, svg, button, .file-picker, label[for*="file" i]').forEach(e => {
+      clone.querySelectorAll('input, [type="file"], img, svg, button, .file-picker, label[for*="file" i], #ci-capture-modal, [class*="ci-"], [id*="ci-"]').forEach(e => {
         try { e.remove(); } catch(err) {}
       });
       let text = clone.innerText?.trim() || '';
-      text = text.replace(/^(You|Gemini|Claude|ChatGPT|User|Assistant)\s+said:?\s*/i, '').trim();
+      text = text.replace(/^(You|Gemini|Claude|ChatGPT|User|Assistant)\s+said:?/i, '').trim();
       return text;
     } catch(e) {
       return el.innerText?.trim() || '';
@@ -598,13 +599,13 @@
 
       const getMessageElements = () => {
         if (PLATFORM === 'chatgpt') {
-          return document.querySelectorAll('[data-message-author-role]');
+          return container.querySelectorAll('[data-message-author-role]');
         } else if (PLATFORM === 'claude') {
-          return document.querySelectorAll('[class*="message"], [data-testid*="message"]');
+          return container.querySelectorAll('[class*="message"], [data-testid*="message"]');
         } else if (PLATFORM === 'gemini') {
-          return document.querySelectorAll('.query-content, message-content, [class*="message"]');
+          return container.querySelectorAll('.query-content, message-content, [class*="message"]');
         } else {
-          return document.querySelectorAll('[data-message-author-role], [class*="message"], [class*="query"]');
+          return container.querySelectorAll('[data-message-author-role], [class*="message"], [class*="query"]');
         }
       };
 
@@ -653,7 +654,10 @@
           scrollAttempts++;
         }
 
-        const rawText = container.innerText || container.textContent || '';
+        // Fix Bug 2: read via getSanitizedText to exclude extension UI completely
+        const rawText = getSanitizedText(container);
+        console.log('[Capsule Capture Debug] TIER 2 RAW LENGTH:', rawText.length, 'PREVIEW:', rawText.slice(0, 300));
+        
         const blocksCount = (rawText.match(/^(You|Gemini|Claude|ChatGPT|User|Assistant|System)\s+said:?/gim) || []).length;
         const ratio = mountedCount > 0 ? (blocksCount / mountedCount) : 1;
 
@@ -684,9 +688,10 @@
         showToast(`Captured ${count} messages so far...`, 'info');
       };
 
+      // Fix Bug 2: pass container context to query visible messages within the scroll container
       return await DOMAccumulator.accumulate(
         container, 
-        extractCurrentVisibleMessages, 
+        () => extractCurrentVisibleMessages(container), 
         getMessageKey,
         progressCallback
       );
@@ -700,7 +705,7 @@
       const originalScrollTop = container.scrollTop;
 
       while (scrollAttempts < maxAttempts) {
-        const currentMessages = extractCurrentVisibleMessages();
+        const currentMessages = extractCurrentVisibleMessages(container);
         accumulatedMessages = mergeMessages(currentMessages, accumulatedMessages);
         const lastScrollTop = container.scrollTop;
         container.scrollTop = Math.max(0, container.scrollTop - 600);
@@ -734,8 +739,12 @@
 
       const container = findScrollContainer();
       if (!container) {
-        return extractCurrentVisibleMessages();
+        console.warn('[Capsule Extractor Debug] No scroll container found, using fallback visible elements.');
+        return extractCurrentVisibleMessages(document);
       }
+
+      console.log('[Capsule Extractor Debug] findScrollContainer selectors matched container.');
+      console.log('[Capsule Extractor Debug] Target container class:', container.className, 'HTML preview:', container.outerHTML.slice(0, 250));
 
       // Tier 2: Force-Load & Select-All
       try {
@@ -759,14 +768,18 @@
     return await ExtractionController.extract();
   };
 
-  function extractCurrentVisibleMessages() {
+  function extractCurrentVisibleMessages(container = document) {
     const messages = [];
+    const root = container || document;
 
     try {
       if (PLATFORM === 'chatgpt') {
-        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT, {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
           acceptNode(node) {
             try {
+              if (node.closest('#ci-capture-modal') || node.closest('[class*="ci-"]') || node.closest('[id*="ci-"]')) {
+                return NodeFilter.FILTER_REJECT;
+              }
               if (node && node.hasAttribute && node.hasAttribute('data-message-author-role')) {
                 return NodeFilter.FILTER_ACCEPT;
               }
@@ -783,9 +796,10 @@
           } catch (e) {}
         }
       } else if (PLATFORM === 'claude') {
-        document.querySelectorAll('[class*="message"], [data-testid]').forEach(el => {
+        root.querySelectorAll('[class*="message"], [data-testid]').forEach(el => {
           try {
             if (!el) return;
+            if (el.closest('#ci-capture-modal') || el.closest('[class*="ci-"]') || el.closest('[id*="ci-"]')) return;
             const text = getSanitizedText(el);
             if (!text || text.length < 5) return;
             const testId = el.getAttribute('data-testid') || '';
@@ -795,9 +809,10 @@
           } catch (e) {}
         });
       } else if (PLATFORM === 'gemini') {
-        document.querySelectorAll('model-response, [class*="query-text"], [class*="response-container"]').forEach(el => {
+        root.querySelectorAll('model-response, [class*="query-text"], [class*="response-container"]').forEach(el => {
           try {
             if (!el) return;
+            if (el.closest('#ci-capture-modal') || el.closest('[class*="ci-"]') || el.closest('[id*="ci-"]')) return;
             const text = getSanitizedText(el);
             if (!text || text.length < 5) return;
             const tagName = el.tagName?.toLowerCase() || '';
@@ -806,9 +821,10 @@
           } catch (e) {}
         });
       } else if (PLATFORM === 'deepseek') {
-        document.querySelectorAll('.ds-message').forEach(el => {
+        root.querySelectorAll('.ds-message').forEach(el => {
           try {
             if (!el) return;
+            if (el.closest('#ci-capture-modal') || el.closest('[class*="ci-"]') || el.closest('[id*="ci-"]')) return;
             const isAssistant = el.querySelector('.ds-markdown') !== null;
             if (isAssistant) {
               const markdownEl = el.querySelector('.ds-markdown');
@@ -832,9 +848,10 @@
           } catch (e) {}
         });
       } else {
-        document.querySelectorAll('[data-message-author-role], .message-content, .prose, [role="log"] > div').forEach(el => {
+        root.querySelectorAll('[data-message-author-role], .message-content, .prose, [role="log"] > div').forEach(el => {
           try {
             if (!el) return;
+            if (el.closest('#ci-capture-modal') || el.closest('[class*="ci-"]') || el.closest('[id*="ci-"]')) return;
             const text = getSanitizedText(el);
             if (text && text.length > 5) {
               const role = el.getAttribute('data-message-author-role') || 'unknown';
@@ -909,6 +926,11 @@
     }
 
     const messagesOrText = await fetchFullChatHistory();
+
+    console.log('[Capsule Capture Debug] Raw messagesOrText type:', typeof messagesOrText, Array.isArray(messagesOrText) ? `Array size: ${messagesOrText.length}` : `Text length: ${messagesOrText ? messagesOrText.length : 0}`);
+    if (typeof messagesOrText === 'string') {
+      console.log('[Capsule Capture Debug] RAW LENGTH:', messagesOrText.length, 'PREVIEW:', messagesOrText.slice(0, 300));
+    }
 
     if (!messagesOrText || messagesOrText.length === 0) {
       const main = document.querySelector('main, [role="main"], .conversation');
@@ -992,6 +1014,7 @@
   // CAPTURE MODAL
   // ============================================================
   function showCaptureModal(conv) {
+    currentCapture = conv;
     removeModal();
 
     const overlay = document.createElement('div');
@@ -999,7 +1022,7 @@
     overlay.id = 'ci-capture-modal';
     const pi = CapsuleUtils.getPlatformInfo(PLATFORM);
 
-    const savingsText = conv.savingsPercent > 0 ? `⚡ ${conv.savingsPercent}% Tokens Saved (~${conv.compressedTokens} tokens)` : '';
+    const savingsText = currentCapture.savingsPercent > 0 ? `⚡ ${currentCapture.savingsPercent}% Tokens Saved (~${currentCapture.compressedTokens} tokens)` : '';
 
     overlay.innerHTML = `
       <div class="ci-modal">
@@ -1010,11 +1033,11 @@
         <div class="ci-modal-body">
           <div class="ci-form-group">
             <label class="ci-form-label">Title</label>
-            <input class="ci-form-input" id="ci-cap-title" value="${CapsuleUtils.sanitize(conv.title)}" placeholder="Name your capsule..." />
+            <input class="ci-form-input" id="ci-cap-title" value="${CapsuleUtils.sanitize(currentCapture.title)}" placeholder="Name your capsule..." />
           </div>
           <div class="ci-form-group">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-              <label class="ci-form-label" style="margin:0;">Content <span class="ci-platform-badge" style="background:${pi.color}20;color:${pi.color};margin-left:6px;">${pi.icon} ${pi.name} \u00B7 ${conv.messageCount} messages</span></label>
+              <label class="ci-form-label" style="margin:0;">Content <span class="ci-platform-badge" style="background:${pi.color}20;color:${pi.color};margin-left:6px;">${pi.icon} ${pi.name} \u00B7 ${currentCapture.messageCount} messages</span></label>
               <span id="ci-token-badge" style="font-size:10px;font-weight:600;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 8px;border-radius:10px;">${savingsText}</span>
             </div>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
@@ -1022,7 +1045,7 @@
               <button type="button" class="ci-btn" id="ci-btn-mode-raw" style="padding:4px 10px;font-size:11px;background:rgba(255,255,255,0.08);color:#94a3b8;border-radius:6px;border:none;cursor:pointer;">📄 Raw Transcript</button>
             </div>
             <textarea class="ci-form-textarea" id="ci-cap-content" placeholder="Loading content..."></textarea>
-            <div class="ci-char-count" id="ci-charcount">${CapsuleUtils.wordCount(conv.compressedContent || conv.content)} words</div>
+            <div class="ci-char-count" id="ci-charcount">${CapsuleUtils.wordCount(currentCapture.compressedContent || currentCapture.content)} words</div>
           </div>
           <div class="ci-form-group">
             <label class="ci-form-label">Folder</label>
@@ -1051,36 +1074,39 @@
     const btnRaw = overlay.querySelector('#ci-btn-mode-raw');
     const tokenBadge = overlay.querySelector('#ci-token-badge');
 
-    let currentFullContent = conv.compressedContent || conv.content;
+    let isCompressedMode = true;
 
     // Asynchronously set initial content to prevent UI freezing
     setTimeout(() => {
-      contentTextarea.value = currentFullContent.slice(0, 30000);
-      charCountEl.innerText = `${CapsuleUtils.wordCount(currentFullContent)} words`;
+      const initialVal = currentCapture.compressedContent || currentCapture.content || '';
+      contentTextarea.value = initialVal.slice(0, 30000);
+      charCountEl.innerText = `${CapsuleUtils.wordCount(initialVal)} words`;
     }, 20);
 
     btnCompressed.addEventListener('click', () => {
+      isCompressedMode = true;
       btnCompressed.style.background = '#6366f1';
       btnCompressed.style.color = '#fff';
       btnRaw.style.background = 'rgba(255,255,255,0.08)';
       btnRaw.style.color = '#94a3b8';
-      currentFullContent = conv.compressedContent || conv.content;
+      const content = currentCapture.compressedContent || currentCapture.content || '';
       setTimeout(() => {
-        contentTextarea.value = currentFullContent.slice(0, 30000);
-        charCountEl.innerText = `${CapsuleUtils.wordCount(currentFullContent)} words`;
+        contentTextarea.value = content.slice(0, 30000);
+        charCountEl.innerText = `${CapsuleUtils.wordCount(content)} words`;
       }, 20);
       if (tokenBadge) tokenBadge.style.display = 'inline-block';
     });
 
     btnRaw.addEventListener('click', () => {
+      isCompressedMode = false;
       btnRaw.style.background = '#6366f1';
       btnRaw.style.color = '#fff';
       btnCompressed.style.background = 'rgba(255,255,255,0.08)';
       btnCompressed.style.color = '#94a3b8';
-      currentFullContent = conv.rawContent || conv.content;
+      const content = currentCapture.rawContent || currentCapture.content || '';
       setTimeout(() => {
-        contentTextarea.value = currentFullContent.slice(0, 30000);
-        charCountEl.innerText = `${CapsuleUtils.wordCount(currentFullContent)} words`;
+        contentTextarea.value = content.slice(0, 30000);
+        charCountEl.innerText = `${CapsuleUtils.wordCount(content)} words`;
       }, 20);
       if (tokenBadge) tokenBadge.style.display = 'none';
     });
@@ -1122,10 +1148,15 @@
       );
     }
 
-    // Word count / update currentFullContent on edit
-    overlay.querySelector('#ci-cap-content').addEventListener('input', e => {
-      currentFullContent = e.target.value;
-      document.getElementById('ci-charcount').textContent = CapsuleUtils.wordCount(currentFullContent) + ' words';
+    // Word count / update state on edit
+    contentTextarea.addEventListener('input', e => {
+      const val = e.target.value;
+      if (isCompressedMode) {
+        currentCapture.compressedContent = val;
+      } else {
+        currentCapture.rawContent = val;
+      }
+      charCountEl.textContent = CapsuleUtils.wordCount(val) + ' words';
     });
 
     async function saveCapsuleViaBackground(capsuleData) {
@@ -1200,7 +1231,10 @@
       }
 
       const title = overlay.querySelector('#ci-cap-title').value.trim() || 'Untitled';
-      const content = currentFullContent.trim();
+      const content = isCompressedMode
+        ? (currentCapture.compressedContent || currentCapture.content || '').trim()
+        : (currentCapture.rawContent || currentCapture.content || '').trim();
+
       if (!content) { showToast('Content is required', 'error'); return null; }
 
       // Prepend Systemic AI Context to the content
@@ -1213,7 +1247,7 @@
         sourceUrl: window.location.href,
         folderId: overlay.querySelector('#ci-cap-folder').value || null,
         tags,
-        messageCount: conv.messageCount,
+        messageCount: currentCapture.messageCount,
         captureMethod: 'floating-button'
       };
 
