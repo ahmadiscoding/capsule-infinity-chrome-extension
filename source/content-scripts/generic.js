@@ -872,15 +872,15 @@
     overlay.querySelector('#ci-modal-close').onclick = (e) => { e.stopPropagation(); removeModal(); };
     overlay.querySelector('#ci-modal-cancel').onclick = (e) => { e.stopPropagation(); removeModal(); };
     
-    // Prevent any modal mouse/keyboard event from bubbling or capturing to the host page
+    // Prevent any modal mouse/keyboard event from bubbling to the host page
     overlay.addEventListener('click', e => {
       e.stopPropagation();
       if (e.target === overlay) removeModal();
-    }, true);
-    overlay.addEventListener('mousedown', e => e.stopPropagation(), true);
-    overlay.addEventListener('mouseup', e => e.stopPropagation(), true);
-    overlay.addEventListener('keydown', e => e.stopPropagation(), true);
-    overlay.addEventListener('keyup', e => e.stopPropagation(), true);
+    });
+    overlay.addEventListener('mousedown', e => e.stopPropagation());
+    overlay.addEventListener('mouseup', e => e.stopPropagation());
+    overlay.addEventListener('keydown', e => e.stopPropagation());
+    overlay.addEventListener('keyup', e => e.stopPropagation());
 
     // Tags
     const tags = [];
