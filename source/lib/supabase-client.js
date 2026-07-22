@@ -110,6 +110,23 @@ const SupabaseClient = {
   async ensureInitialized() {
     if (!this.initialized) {
       await this.init();
+    } else if (this.instance) {
+      try {
+        const res = await chrome.storage.local.get(['supabaseSession']);
+        const storageSession = res.supabaseSession;
+        const { data: { session: currentSession } } = await this.instance.auth.getSession();
+
+        if (storageSession) {
+          if (!currentSession || currentSession.access_token !== storageSession.access_token) {
+            await this.instance.auth.setSession(storageSession);
+          }
+        } else if (currentSession) {
+          await this.signOut();
+          await this.init();
+        }
+      } catch (e) {
+        console.warn('[SupabaseClient] Session sync in ensureInitialized failed:', e);
+      }
     }
     return this.instance;
   }

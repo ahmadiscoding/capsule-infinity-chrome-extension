@@ -69,7 +69,7 @@ const CapsuleStorage = {
       if (error) throw error;
       return data || [];
     } catch (e) {
-      console.error('[Storage] Supabase getCloudTeams failed:', e);
+      console.error('[Storage] Supabase getCloudTeams failed:', e.message || e.details || JSON.stringify(e));
       return [];
     }
   },
@@ -128,7 +128,7 @@ const CapsuleStorage = {
           }
         }
       } catch (e) {
-        console.error('[Storage] Supabase fetch capsules failed, falling back to local:', e);
+        console.error('[Storage] Supabase fetch capsules failed, falling back to local:', e.message || e.details || JSON.stringify(e));
       }
     }
 
@@ -170,7 +170,7 @@ const CapsuleStorage = {
           };
         }
       } catch (e) {
-        console.error('[Storage] Supabase getCapsule failed:', e);
+        console.error('[Storage] Supabase getCapsule failed:', e.message || e.details || JSON.stringify(e));
       }
     }
     const all = await this.getAllCapsules();
@@ -249,7 +249,7 @@ const CapsuleStorage = {
           }
         }
       } catch (e) {
-        console.error('[Storage] Supabase save capsule failed:', e);
+        console.error('[Storage] Supabase save capsule failed:', e.message || e.details || JSON.stringify(e));
         throw e;
       }
     }
