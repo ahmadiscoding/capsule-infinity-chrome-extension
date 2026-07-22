@@ -95,18 +95,48 @@ const CapsuleCompressor = {
   },
 
   /**
+   * Recursively clean up empty values ([], "", {}, null, undefined) from JSON
+   */
+  cleanEmptyFields(obj) {
+    if (obj === null || obj === undefined) return null;
+    if (Array.isArray(obj)) {
+      const cleanedArr = obj.map(item => this.cleanEmptyFields(item)).filter(item => {
+        if (item === null || item === undefined || item === '') return false;
+        if (Array.isArray(item) && item.length === 0) return false;
+        if (typeof item === 'object' && Object.keys(item).length === 0) return false;
+        return true;
+      });
+      return cleanedArr.length > 0 ? cleanedArr : null;
+    }
+    if (typeof obj === 'object') {
+      const cleanedObj = {};
+      Object.keys(obj).forEach(key => {
+        const cleanedVal = this.cleanEmptyFields(obj[key]);
+        if (cleanedVal !== null && cleanedVal !== undefined && cleanedVal !== '') {
+          if (Array.isArray(cleanedVal) && cleanedVal.length === 0) return;
+          if (typeof cleanedVal === 'object' && Object.keys(cleanedVal).length === 0) return;
+          cleanedObj[key] = cleanedVal;
+        }
+      });
+      return Object.keys(cleanedObj).length > 0 ? cleanedObj : null;
+    }
+    return obj;
+  },
+
+  /**
    * Safe JSON Mutation Payload Parser (Fallback & Regex-based)
    */
   parseJsonPayload(rawResponse) {
-    if (!rawResponse) return null;
+    if (!rawResponse) return {};
     let cleaned = rawResponse.trim();
+    let parsed = null;
 
     // Strip markdown code fences
     cleaned = cleaned.replace(/```(?:json)?\n([\s\S]*?)\n```/g, '$1');
     cleaned = cleaned.replace(/```/g, '').trim();
 
     try {
-      return JSON.parse(cleaned);
+      parsed = JSON.parse(cleaned);
     } catch (e) {
       // Fallback: search for first '{' and last '}'
       const firstBrace = cleaned.indexOf('{');
@@ -114,25 +144,35 @@ const CapsuleCompressor = {
       if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
         const candidate = cleaned.slice(firstBrace, lastBrace + 1);
         try {
-          return JSON.parse(candidate);
+          parsed = JSON.parse(candidate);
         } catch (innerErr) {
           console.warn('[Parser Fallback] Regex JSON object extraction failed:', innerErr);
         }
       }
 
       // Fallback: search for first '[' and last ']'
-      const firstBracket = cleaned.indexOf('[');
-      const lastBracket = cleaned.lastIndexOf(']');
-      if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
-        const candidate = cleaned.slice(firstBracket, lastBracket + 1);
-        try {
-          return JSON.parse(candidate);
-        } catch (innerErr) {
-          console.warn('[Parser Fallback] Regex JSON array extraction failed:', innerErr);
+      if (!parsed) {
+        const firstBracket = cleaned.indexOf('[');
+        const lastBracket = cleaned.lastIndexOf(']');
+        if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+          const candidate = cleaned.slice(firstBracket, lastBracket + 1);
+          try {
+            parsed = JSON.parse(candidate);
+          } catch (innerErr) {
+            console.warn('[Parser Fallback] Regex JSON array extraction failed:', innerErr);
+          }
         }
       }
     }
-    return null;
+
+    // Default fallback to safe state
+    if (!parsed) {
+      return {};
+    }
+
+    // Run clean-up pass to remove empty fields recursively
+    const cleanedResult = this.cleanEmptyFields(parsed);
+    return cleanedResult || (Array.isArray(parsed) ? [] : {});
   },
 
   /**
