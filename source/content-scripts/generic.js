@@ -437,6 +437,57 @@
     return [...newBatch, ...accumulated];
   }
 
+  /**
+   * Task 3: Deep Clone & Sanitize DOM Node before text extraction
+   * Removes all inputs, file attachments, images, svgs, and buttons to prevent Windows file dialogs & CPU spikes
+   */
+  function getSanitizedText(el) {
+    if (!el) return '';
+    try {
+      const clone = el.cloneNode(true);
+      clone.querySelectorAll('input, [type="file"], img, svg, button, .file-picker, label[for*="file" i]').forEach(e => {
+        try { e.remove(); } catch(err) {}
+      });
+      let text = clone.innerText?.trim() || '';
+      text = text.replace(/^(You|Gemini|Claude|ChatGPT|User|Assistant)\s+said:?\s*/i, '').trim();
+      return text;
+    } catch(e) {
+      return el.innerText?.trim() || '';
+    }
+  }
+
+  /**
+   * Task 1: API / In-Memory Interceptor Extraction (Zero-DOM Dependency)
+   */
+  async function tryApiInterception() {
+    if (PLATFORM === 'chatgpt') {
+      const match = location.pathname.match(/\/c\/([a-f0-9-]+)/);
+      if (match && match[1]) {
+        try {
+          const resp = await fetch(`https://chatgpt.com/backend-api/conversation/${match[1]}`, { credentials: 'include' });
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data && data.mapping) {
+              const msgs = [];
+              Object.values(data.mapping).forEach(node => {
+                const msg = node.message;
+                if (msg && msg.content && msg.content.parts) {
+                  const role = msg.author?.role || 'user';
+                  const text = msg.content.parts.filter(p => typeof p === 'string').join('\n').trim();
+                  if (text && role !== 'system') {
+                    msgs.push({ role, content: text });
+                  }
+                }
+              });
+              if (msgs.length > 0) return msgs;
+            }
+          }
+        } catch(e) {}
+      }
+    }
+    return null;
+  }
+
   function extractCurrentVisibleMessages() {
     const messages = [];
 
@@ -456,7 +507,7 @@
         while (node = walker.nextNode()) {
           try {
             const role = node.getAttribute('data-message-author-role') || 'unknown';
-            const text = node.innerText?.trim() || '';
+            const text = getSanitizedText(node);
             if (text && text.length > 5) messages.push({ role, content: text });
           } catch (e) {}
         }
@@ -464,7 +515,7 @@
         document.querySelectorAll('[class*="message"], [data-testid]').forEach(el => {
           try {
             if (!el) return;
-            const text = el.innerText?.trim() || '';
+            const text = getSanitizedText(el);
             if (!text || text.length < 5) return;
             const testId = el.getAttribute('data-testid') || '';
             const role = testId.includes('human') || testId.includes('user') ? 'user' : 'assistant';
@@ -476,7 +527,7 @@
         document.querySelectorAll('model-response, [class*="query-text"], [class*="response-container"]').forEach(el => {
           try {
             if (!el) return;
-            const text = el.innerText?.trim() || '';
+            const text = getSanitizedText(el);
             if (!text || text.length < 5) return;
             const tagName = el.tagName?.toLowerCase() || '';
             const isUser = tagName === 'model-response' ? false : true;
@@ -490,12 +541,11 @@
             const isAssistant = el.querySelector('.ds-markdown') !== null;
             if (isAssistant) {
               const markdownEl = el.querySelector('.ds-markdown');
-              let text = markdownEl ? (markdownEl.innerText?.trim() || '') : '';
+              let text = markdownEl ? getSanitizedText(markdownEl) : '';
               if (text) {
-                // Capture R1 reasoning/thinking chain if present
                 const thinkingEl = el.querySelector('[class*="think"], [class*="reasoning"], .e1675d8b');
                 if (thinkingEl && thinkingEl !== markdownEl) {
-                  const thinkingText = thinkingEl.innerText?.trim() || '';
+                  const thinkingText = getSanitizedText(thinkingEl);
                   if (thinkingText && thinkingText.length > 0) {
                     text = `<thinking>\n${thinkingText}\n</thinking>\n\n${text}`;
                   }
@@ -503,32 +553,18 @@
                 messages.push({ role: 'assistant', content: text });
               }
             } else {
-              // User message
-              const text = el.innerText?.trim() || '';
+              const text = getSanitizedText(el);
               if (text && text.length > 0) {
                 messages.push({ role: 'user', content: text });
               }
             }
           } catch (e) {}
         });
-        // Fallback for newer DeepSeek versions
-        if (messages.length === 0) {
-          document.querySelectorAll('.ds-markdown').forEach(el => {
-            try {
-              if (!el) return;
-              const text = el.innerText?.trim() || '';
-              if (text) {
-                messages.push({ role: 'assistant', content: text });
-              }
-            } catch (e) {}
-          });
-        }
       } else {
-        // Generic: try common patterns
         document.querySelectorAll('[data-message-author-role], .message-content, .prose, [role="log"] > div').forEach(el => {
           try {
             if (!el) return;
-            const text = el.innerText?.trim() || '';
+            const text = getSanitizedText(el);
             if (text && text.length > 5) {
               const role = el.getAttribute('data-message-author-role') || 'unknown';
               messages.push({ role, content: text });
@@ -564,7 +600,6 @@
       }
     }
 
-    // Fallback: search parents of any message node
     const messageNode = document.querySelector('[data-message-author-role], [class*="message"], [class*="query-text"], .ds-message, [role="log"]');
     if (messageNode) {
       let parent = messageNode.parentElement;
@@ -580,7 +615,17 @@
     return document.querySelector('main') || document.documentElement || document.body;
   }
 
+  /**
+   * Task 2: Controlled Virtualized DOM Walker (Fallback Strategy)
+   * Asynchronous, non-blocking scrolling with setTimeout (150ms) to keep CPU < 10-15%
+   */
   async function fetchFullChatHistory() {
+    // Attempt Task 1 API Interception first
+    const apiMessages = await tryApiInterception();
+    if (apiMessages && apiMessages.length > 0) {
+      return apiMessages;
+    }
+
     const container = findScrollContainer();
     if (!container) {
       return extractCurrentVisibleMessages();
@@ -588,13 +633,12 @@
 
     let accumulatedMessages = [];
     let scrollAttempts = 0;
-    const maxAttempts = 40; // Extended safety limit for deep chats
+    const maxAttempts = 30; // 8-second safety ceiling
     let noNewContentCount = 0;
 
     const originalScrollTop = container.scrollTop;
 
     while (scrollAttempts < maxAttempts) {
-      // 1. Scrape visible
       const currentMessages = extractCurrentVisibleMessages();
       const previousLength = accumulatedMessages.length;
       accumulatedMessages = mergeMessages(currentMessages, accumulatedMessages);
@@ -605,28 +649,19 @@
         noNewContentCount = 0;
       }
 
-      if (container.scrollTop === 0) {
-        if (noNewContentCount >= 2) {
-          break;
-        }
+      if (container.scrollTop === 0 && noNewContentCount >= 2) {
+        break; // Reached top of chat thread
       }
 
-      // 2. Trigger platform-specific load buttons if present
-      try {
-        const loadMoreBtns = document.querySelectorAll('button[aria-label*="load" i], button[aria-label*="older" i], button[aria-label*="previous" i]');
-        loadMoreBtns.forEach(btn => { if (btn && btn.offsetWidth > 0) btn.click(); });
-      } catch(e) {}
-
-      // 3. Scroll to top to trigger lazy-load virtual scroll lists
-      container.scrollTop = 0;
+      // Step scrollTop upwards smoothly
+      container.scrollTop = Math.max(0, container.scrollTop - 600);
       container.dispatchEvent(new Event('scroll', { bubbles: true }));
 
-      // 4. Pause for rendering
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Non-blocking 150ms delay keeps CPU < 10-15%
+      await new Promise(resolve => setTimeout(resolve, 150));
       scrollAttempts++;
     }
 
-    // Restore original scroll position so user experience is uninterrupted
     container.scrollTop = originalScrollTop;
 
     return accumulatedMessages;
@@ -659,7 +694,7 @@
     if (messages.length === 0) {
       const main = document.querySelector('main, [role="main"], .conversation');
       if (main) {
-        const text = main.innerText?.trim();
+        const text = getSanitizedText(main);
         if (text && text.length > 20) {
           return { title: document.title || 'Conversation', content: text.substring(0, 100000), rawContent: text, compressedContent: text, messageCount: 1, platform: PLATFORM };
         }
@@ -669,7 +704,13 @@
 
     const rawFormatted = messages.map(m => `[${m.role.toUpperCase()}]:\n${m.content}`).join('\n\n---\n\n').substring(0, 100000);
     const firstUser = messages.find(m => m.role === 'user');
-    const title = firstUser ? firstUser.content.substring(0, 80).split('\n')[0] : document.title;
+    let rawTitle = firstUser ? firstUser.content.substring(0, 80).split('\n')[0] : document.title;
+    
+    // Clean conversational labels like "You said" from title
+    let title = rawTitle.replace(/^(You|Gemini|Claude|ChatGPT|User|Assistant)\s+said:?\s*/i, '').trim();
+    if (!title || title.toLowerCase() === 'you said') {
+      title = `${CapsuleUtils.getPlatformInfo(PLATFORM).name} Chat`;
+    }
 
     let compressedObj = { compressedContent: rawFormatted, savingsPercent: 0, rawTokens: 0, compressedTokens: 0 };
     if (typeof CapsuleCompressor !== 'undefined') {
