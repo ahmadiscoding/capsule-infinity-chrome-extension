@@ -222,6 +222,33 @@ const CapsuleCompressor = {
     return containsTech || containsFile;
   },
 
+  validateInput(text) {
+    if (!text || typeof text !== 'string') return;
+    
+    // Check density of raw HTML tags/attributes
+    const htmlMatches = text.match(/(<div|class="|<\/button>|<\/div>|<span|id="ci-)/gi) || [];
+    if (htmlMatches.length > 0) {
+      const density = (htmlMatches.length * 15) / text.length;
+      if (density > 0.005) {
+        throw new Error('Input validation failed: Injected extension UI markup detected.');
+      }
+    }
+  },
+
+  calculateJaccardSimilarity(str1, str2) {
+    const words1 = new Set(str1.toLowerCase().match(/\b\w+\b/g) || []);
+    const words2 = new Set(str2.toLowerCase().match(/\b\w+\b/g) || []);
+    if (words1.size === 0 || words2.size === 0) return 0;
+    
+    let intersection = 0;
+    words1.forEach(w => {
+      if (words2.has(w)) intersection++;
+    });
+    
+    const union = words1.size + words2.size - intersection;
+    return intersection / union;
+  },
+
   /**
    * Extract mutations from cleaned text deterministically
    */
@@ -239,7 +266,7 @@ const CapsuleCompressor = {
     mutations.push({
       action: 'UPSERT',
       type: 'todo',
-      id: 'todo.conversation_goal',
+      id: 'todo.conversation.goal',
       attributes: { goal: goalFallback },
       confidence: 0.95
     });
@@ -252,7 +279,7 @@ const CapsuleCompressor = {
       }
 
       const parts = line.split(':');
-      if (parts.length >= 2 && ['decision', 'preference', 'constraint', 'todo', 'bug', 'problem', 'solution'].includes(parts[0].trim().toLowerCase())) {
+      if (parts.length >= 2 && ['decision', 'preference', 'constraint', 'todo', 'bug', 'problem', 'solution', 'recommendation', 'suggestion'].includes(parts[0].trim().toLowerCase())) {
         const key = parts[0].trim().toLowerCase();
         const value = parts.slice(1).join(':').trim();
         
@@ -262,6 +289,7 @@ const CapsuleCompressor = {
         else if (key === 'constraint') type = 'constraint';
         else if (key === 'todo') type = 'todo';
         else if (key === 'bug' || key === 'problem') type = 'bug';
+        else if (key === 'recommendation' || key === 'suggestion') type = 'recommendation';
         else if (key === 'solution') {
           type = 'bug';
           action = 'RESOLVE';
@@ -290,6 +318,9 @@ const CapsuleCompressor = {
       } else if (lower.includes('decide') || lower.includes('choose') || lower.includes('chose') || lower.includes('implement') || lower.includes('prefer') || lower.includes('switch') || lower.includes('adopt') || lower.includes('select')) {
         type = 'decision';
         attrKey = 'decision';
+      } else if (lower.includes('recommend') || lower.includes('suggest') || lower.includes('option') || lower.includes('advisory') || lower.includes('advise')) {
+        type = 'recommendation';
+        attrKey = 'recommendation';
       } else if (lower.includes('must') || lower.includes('restrict') || lower.includes('limit') || lower.includes('constraint') || lower.includes('rule') || lower.includes('require')) {
         type = 'constraint';
         attrKey = 'constraint';
@@ -337,12 +368,29 @@ const CapsuleCompressor = {
         id = `${mut.type || 'unknown'}.${fallbackAttr.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
       }
 
+      // 4. Jaccard similarity to prevent duplicate sentences
+      const valStr = Object.values(mut.attributes || {})[0] || '';
+      if (valStr) {
+        const duplicateIdx = entities.findIndex(e => {
+          if (e.type !== mut.type) return false;
+          const existingVal = Object.values(e.attributes || {})[0] || '';
+          return this.calculateJaccardSimilarity(valStr, existingVal) >= 0.80;
+        });
+        if (duplicateIdx !== -1) {
+          const existing = entities[duplicateIdx];
+          const existingVal = Object.values(existing.attributes || {})[0] || '';
+          if (valStr.length > existingVal.length) {
+            existing.attributes = { ...existing.attributes, ...mut.attributes };
+          }
+          return;
+        }
+      }
+
       const idx = entities.findIndex(e => e.id === id);
       const now = new Date().toISOString();
 
       if (mut.action === 'UPSERT') {
         if (idx !== -1) {
-          // Merge attributes, increment version
           const existing = entities[idx];
           entities[idx] = {
             id,
@@ -354,7 +402,6 @@ const CapsuleCompressor = {
             updated_at: now
           };
         } else {
-          // Insert new entity
           entities.push({
             id,
             type: mut.type || 'generic',
@@ -446,6 +493,9 @@ const CapsuleCompressor = {
       rawText = String(rawInput);
     }
 
+    // Step 0: Input Validation density check
+    this.validateInput(rawText);
+
     const cleaned = this.cleanText(rawText);
     const mutations = this.extractMutations(cleaned, firstUserMsg);
     const existingEntities = options.existingEntities || [];
@@ -471,7 +521,7 @@ const CapsuleCompressor = {
    */
   compress(rawInput, options = {}) {
     const res = this.compressToJSON(rawInput, options);
-    const composedMarkdown = ContextComposer.compose(res.json, options);
+    const composedMarkdown = ContextComposer.compose(res.json, { ...options, originalWords: res.rawContent.split(/\s+/).filter(Boolean).length });
     const composedTokens = this.estimateTokens(composedMarkdown);
     const savingsPercent = res.rawTokens > 0 ? Math.max(0, Math.round(((res.rawTokens - composedTokens) / res.rawTokens) * 100)) : 0;
 
@@ -513,77 +563,153 @@ const ContextComposer = {
     return chunkStrings.join(' ');
   },
 
+  clusterEntities(entities) {
+    const topics = {};
+    const stopwords = new Set(['about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren\'t', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 'can\'t', 'cannot', 'could', 'couldn\'t', 'did', 'didn\'t', 'do', 'does', 'doesn\'t', 'doing', 'don\'t', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', 'hadn\'t', 'has', 'hasn\'t', 'have', 'haven\'t', 'having', 'he', 'he\'d', 'he\'ll', 'he\'s', 'her', 'here', 'here\'s', 'hers', 'herself', 'him', 'himself', 'his', 'how', 'how\'s', 'i', 'i\'d', 'i\'ll', 'i\'m', 'i\'ve', 'if', 'in', 'into', 'is', 'isn\'t', 'it', 'it\'s', 'its', 'itself', 'let\'s', 'me', 'more', 'most', 'mustn\'t', 'my', 'myself', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'ought', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'shan\'t', 'she', 'she\'d', 'she\'ll', 'she\'s', 'should', 'shouldn\'t', 'so', 'some', 'such', 'than', 'that', 'that\'s', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'there\'s', 'these', 'they', 'they\'d', 'they\'ll', 'they\'re', 'they\'ve', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', 'wasn\'t', 'we', 'we\'d', 'we\'ll', 'we\'re', 'we\'ve', 'were', 'weren\'t', 'what', 'what\'s', 'when', 'when\'s', 'where', 'where\'s', 'which', 'while', 'who', 'who\'s', 'whom', 'why', 'why\'s', 'with', 'won\'t', 'would', 'wouldn\'t', 'you', 'you\'d', 'you\'ll', 'you\'re', 'you\'ve', 'your', 'yours', 'yourself', 'yourselves']);
+
+    entities.forEach(e => {
+      const val = Object.values(e.attributes || {})[0] || '';
+      if (!val) return;
+      const words = val.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
+      e._keywords = words.filter(w => !stopwords.has(w));
+    });
+
+    const wordFreq = {};
+    entities.forEach(e => {
+      (e._keywords || []).forEach(w => {
+        wordFreq[w] = (wordFreq[w] || 0) + 1;
+      });
+    });
+
+    const sortedKeywords = Object.keys(wordFreq)
+      .filter(w => wordFreq[w] >= 2)
+      .sort((a, b) => wordFreq[b] - wordFreq[a]);
+
+    const assigned = new Set();
+    
+    sortedKeywords.forEach(keyword => {
+      const topicName = keyword.charAt(0).toUpperCase() + keyword.slice(1);
+      entities.forEach(e => {
+        if (!assigned.has(e.id) && (e._keywords || []).includes(keyword)) {
+          if (!topics[topicName]) topics[topicName] = [];
+          topics[topicName].push(e);
+          assigned.add(e.id);
+        }
+      });
+    });
+
+    entities.forEach(e => {
+      if (!assigned.has(e.id)) {
+        let bucket = 'General Specifications';
+        if (e.type === 'decision' || e.type === 'recommendation') {
+          bucket = 'Architecture & Design';
+        } else if (e.type === 'todo' || e.type === 'bug') {
+          bucket = 'Project Tasks';
+        }
+        if (!topics[bucket]) topics[bucket] = [];
+        topics[bucket].push(e);
+        assigned.add(e.id);
+      }
+    });
+
+    return topics;
+  },
+
+  compileMarkdown(entities, options = {}) {
+    const topics = this.clusterEntities(entities);
+    const capsuleTitle = options.title || 'Project Capsule';
+
+    let markdown = `**CAPSULE: ${capsuleTitle}**\n\n`;
+    
+    Object.keys(topics).forEach(topicName => {
+      const topicEntities = topics[topicName];
+      if (topicEntities.length === 0) return;
+
+      const decisions = topicEntities.filter(e => e.type === 'decision').map(e => Object.values(e.attributes)[0]);
+      const recommendations = topicEntities.filter(e => e.type === 'recommendation').map(e => Object.values(e.attributes)[0]);
+      const constraints = topicEntities.filter(e => e.type === 'constraint').map(e => Object.values(e.attributes)[0]);
+      const todos = topicEntities.filter(e => e.type === 'todo' && e.id !== 'todo.conversation.goal').map(e => Object.values(e.attributes)[0]);
+      const bugs = topicEntities.filter(e => e.type === 'bug').map(e => Object.values(e.attributes)[0]);
+      const preferences = topicEntities.filter(e => e.type === 'preference' || e.type === 'generic').map(e => Object.values(e.attributes)[0]);
+
+      // Topic Type
+      const isDecision = decisions.length > 0;
+      const typeText = isDecision ? 'Decision' : 'Advisory';
+
+      // Goal
+      let goalText = '';
+      const goalEnt = topicEntities.find(e => e.id === 'todo.conversation.goal');
+      if (goalEnt) goalText = Object.values(goalEnt.attributes)[0];
+      if (!goalText) {
+        goalText = `Resolve topic context for ${topicName}`;
+      }
+
+      // Result
+      let resultText = '';
+      if (isDecision) {
+        resultText = this.joinSentences(decisions);
+      } else if (recommendations.length > 0) {
+        resultText = this.joinSentences(recommendations);
+      } else {
+        resultText = 'Recommended implementation path presented to user and confirmed.';
+      }
+
+      // Facts
+      const factsText = preferences.length > 0 ? this.joinSentences(preferences) : 'Standard specifications utilized.';
+
+      // Open/Next
+      const openNextList = [...todos.map(t => `Pending task ${t}`), ...bugs.map(b => `Blocker ${b}`)];
+      const openNextText = openNextList.length > 0 ? this.joinSentences(openNextList) : '';
+
+      markdown += `### 📁 ${topicName}\n`;
+      markdown += `Type: ${typeText}\n`;
+      markdown += `Goal: ${goalText}\n`;
+      markdown += `Facts/Criteria: ${factsText}\n`;
+      markdown += `Result: ${resultText}\n`;
+      if (constraints.length > 0) {
+        markdown += `Constraints: ${this.joinSentences(constraints)}\n`;
+      }
+      if (openNextText) {
+        markdown += `Open/Next: ${openNextText}\n`;
+      }
+      markdown += `\n`;
+    });
+
+    return markdown.trim();
+  },
+
   compose(entities, options = {}) {
     const activeEntities = entities.filter(e => !['RESOLVED', 'DEPRECATED'].includes(e.status));
 
-    // 1. User Intent / Goal
-    const goalEntity = activeEntities.find(e => e.type === 'todo' && (e.id === 'todo.conversation_goal' || e.attributes.goal));
-    let goalText = goalEntity ? (goalEntity.attributes.goal || Object.values(goalEntity.attributes)[0]) : '';
-    if (!goalText) {
-      goalText = 'Discuss and resolve project requirements';
-    }
+    const IMPORTANCE_SCORES = {
+      decision: 10,
+      bug: 10,
+      constraint: 9,
+      recommendation: 8,
+      todo: 7,
+      preference: 5,
+      generic: 3
+    };
 
-    // Capitalize and format topic title
-    let topicTitle = goalText.replace(/^The user wants to /i, '');
-    topicTitle = topicTitle.charAt(0).toUpperCase() + topicTitle.slice(1);
-    if (topicTitle.endsWith('.')) topicTitle = topicTitle.slice(0, -1);
+    const originalWords = options.originalWords || 2000;
+    const wordLimit = Math.max(300, Math.min(2500, Math.round(originalWords * 0.10)));
 
-    // 2. Decisions & Recommendations
-    const decisions = activeEntities.filter(e => e.type === 'decision')
-      .map(d => Object.values(d.attributes)[0])
-      .filter(Boolean);
-    
-    const isDecision = decisions.length > 0;
-    const typeText = isDecision ? 'Decision' : 'Advisory';
-    
-    const decisionsText = isDecision 
-      ? this.joinSentences(decisions)
-      : 'Recommended implementation path presented to user and confirmed.';
+    let currentEntities = [...activeEntities];
+    let composedMarkdown = '';
 
-    // 3. Constraints
-    const constraints = activeEntities.filter(e => e.type === 'constraint')
-      .map(c => Object.values(c.attributes)[0])
-      .filter(Boolean);
-    const constraintsText = constraints.length > 0 
-      ? this.joinSentences(constraints) 
-      : '';
-
-    // 4. Facts/Criteria
-    const techDetails = [];
-    activeEntities.forEach(e => {
-      if (e.type === 'preference' || e.type === 'generic') {
-        const val = Object.values(e.attributes)[0];
-        if (val) techDetails.push(val);
+    for (let attempts = 0; attempts < 25; attempts++) {
+      composedMarkdown = this.compileMarkdown(currentEntities, options);
+      const wordCount = composedMarkdown.split(/\s+/).filter(Boolean).length;
+      
+      if (wordCount <= wordLimit || currentEntities.length <= 3) {
+        break;
       }
-    });
-    const factsText = techDetails.length > 0 
-      ? this.joinSentences(techDetails) 
-      : 'Standard specifications utilized.';
-
-    // 5. Open/Next
-    const todos = activeEntities.filter(e => e.type === 'todo' && e.id !== 'todo.conversation_goal')
-      .map(t => Object.values(t.attributes)[0]);
-    const bugs = activeEntities.filter(e => e.type === 'bug')
-      .map(b => Object.values(b.attributes)[0]);
-    const openNextList = [...todos.map(t => `Pending task ${t}`), ...bugs.map(b => `Blocker ${b}`)];
-    const openNextText = openNextList.length > 0 ? this.joinSentences(openNextList) : '';
-
-    const capsuleTitle = options.title || topicTitle;
-
-    let markdown = `**CAPSULE: ${capsuleTitle}**\n\n`;
-    markdown += `## ${topicTitle}\n`;
-    markdown += `Type: ${typeText}\n`;
-    markdown += `Goal: ${goalText}\n`;
-    markdown += `Facts/Criteria: ${factsText}\n`;
-    markdown += `Result: ${decisionsText}\n`;
-    if (constraintsText) {
-      markdown += `Constraints: ${constraintsText}\n`;
-    }
-    if (openNextText) {
-      markdown += `Open/Next: ${openNextText}\n`;
+      
+      currentEntities.sort((a, b) => (IMPORTANCE_SCORES[a.type] || 3) - (IMPORTANCE_SCORES[b.type] || 3));
+      currentEntities.pop();
     }
 
-    return markdown.trim();
+    return composedMarkdown;
   }
 };
 
