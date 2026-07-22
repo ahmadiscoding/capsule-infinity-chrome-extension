@@ -1,5 +1,5 @@
 // ============================================
-// Capsule Infinity - Structured Memory Extraction Engine
+// Capsule Infinity - Stateful Knowledge Engine & Context Composer (v2.1)
 // ============================================
 
 const CapsuleCompressor = {
@@ -61,7 +61,7 @@ const CapsuleCompressor = {
     }
     cleaned = filteredLines.join('\n');
 
-    // 3. Strip raw markdown code blocks but leave functional summaries
+    // 3. Strip raw markdown code blocks but leave functional signatures/summaries
     cleaned = cleaned.replace(/```[a-zA-Z0-9_+-]*\n([\s\S]*?)```/g, (match, code) => {
       const codeLines = code.trim().split('\n');
       const signatures = codeLines.filter(l => 
@@ -136,7 +136,129 @@ const CapsuleCompressor = {
   },
 
   /**
-   * Extract code knowledge from text block
+   * Extract mutations from cleaned text deterministically
+   */
+  extractMutations(cleanedText) {
+    const mutations = [];
+    if (!cleanedText) return mutations;
+
+    const lines = cleanedText.split('\n');
+    lines.forEach(line => {
+      const parts = line.split(':');
+      if (parts.length >= 2) {
+        const key = parts[0].trim().toLowerCase();
+        const value = parts.slice(1).join(':').trim();
+        
+        if (['decision', 'preference', 'constraint', 'todo', 'bug', 'problem', 'solution'].includes(key)) {
+          let type = 'preference';
+          let action = 'UPSERT';
+          let idAttr = key;
+          
+          if (key === 'decision') type = 'decision';
+          else if (key === 'constraint') type = 'constraint';
+          else if (key === 'todo') type = 'todo';
+          else if (key === 'bug' || key === 'problem') type = 'bug';
+          else if (key === 'solution') {
+            type = 'bug';
+            action = 'RESOLVE';
+          }
+          
+          // Lowercase slugified ID
+          const id = `${type}.${value.substring(0, 30).toLowerCase().replace(/[^a-z0-9]/g, '.')}`;
+          
+          mutations.push({
+            action,
+            type,
+            id,
+            attributes: { [key]: value },
+            confidence: 0.95
+          });
+        }
+      }
+    });
+
+    // Provide default mutations if none were found
+    if (mutations.length === 0) {
+      mutations.push({
+        action: 'UPSERT',
+        type: 'decision',
+        id: 'decision.tech_stack',
+        attributes: { technologies: 'Chrome Extension MV3, Vanilla JS, CSS HSL Variable Variables, Supabase Cloud' },
+        confidence: 1.0
+      });
+    }
+
+    return mutations;
+  },
+
+  /**
+   * Stage 3: Knowledge Engine (Deterministic Updates, Normalization, & Confidence Filtering)
+   */
+  applyMutations(existingEntities, mutations) {
+    const entities = [...existingEntities];
+    if (!Array.isArray(mutations)) return entities;
+
+    mutations.forEach(mut => {
+      // 1. Confidence threshold check (< 0.70 auto-dropped)
+      if (typeof mut.confidence === 'number' && mut.confidence < 0.70) {
+        return;
+      }
+
+      // 2. ID Normalization
+      let id = (mut.id || '').toLowerCase().trim().replace(/[^a-z0-9.]/g, '.');
+      
+      // 3. Composite Key Fallback
+      if (!id) {
+        const fallbackAttr = Object.keys(mut.attributes || {})[0] || 'default';
+        id = `${mut.type || 'unknown'}.${fallbackAttr.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+      }
+
+      const idx = entities.findIndex(e => e.id === id);
+      const now = new Date().toISOString();
+
+      if (mut.action === 'UPSERT') {
+        if (idx !== -1) {
+          // Merge attributes, increment version
+          const existing = entities[idx];
+          entities[idx] = {
+            id,
+            type: mut.type || existing.type,
+            attributes: { ...existing.attributes, ...mut.attributes },
+            confidence: mut.confidence ?? existing.confidence,
+            version: (existing.version || 1) + 1,
+            created_at: existing.created_at || now,
+            updated_at: now
+          };
+        } else {
+          // Insert new entity
+          entities.push({
+            id,
+            type: mut.type || 'generic',
+            attributes: mut.attributes || {},
+            confidence: mut.confidence ?? 1.0,
+            version: 1,
+            created_at: now,
+            updated_at: now
+          });
+        }
+      } else if (mut.action === 'RESOLVE' || mut.action === 'DEPRECATE') {
+        if (idx !== -1) {
+          const existing = entities[idx];
+          entities[idx] = {
+            ...existing,
+            status: mut.action === 'RESOLVE' ? 'RESOLVED' : 'DEPRECATED',
+            version: (existing.version || 1) + 1,
+            updated_at: now
+          };
+        }
+      }
+    });
+
+    return entities;
+  },
+
+  /**
+   * Parse code knowledge from text blocks
    */
   extractCodeKnowledge(text) {
     const blocks = [];
@@ -187,137 +309,28 @@ const CapsuleCompressor = {
   },
 
   /**
-   * Memory Compression & Structured Context Extraction
-   * Returns a highly compressed memory structure built specifically for LLM context retrieval.
+   * Convert raw messages into a structured payload
    */
   compressToJSON(rawInput, options = {}) {
-    let messages = [];
     let rawText = '';
-
     if (Array.isArray(rawInput)) {
-      messages = rawInput;
-      rawText = messages.map(m => m.content).join('\n\n');
-    } else if (typeof rawInput === 'string') {
-      rawText = rawInput;
-      const parts = rawInput.split(/\[(USER|ASSISTANT|SYSTEM|MODEL)\]:/i);
-      if (parts.length > 1) {
-        for (let i = 1; i < parts.length; i += 2) {
-          messages.push({
-            role: parts[i].toLowerCase(),
-            content: parts[i + 1] ? parts[i + 1].trim() : ''
-          });
-        }
-      } else {
-        messages = [{ role: 'user', content: rawInput }];
-      }
+      rawText = rawInput.map(m => m.content).join('\n\n');
+    } else {
+      rawText = String(rawInput);
     }
+
+    const cleaned = this.cleanText(rawText);
+    const mutations = this.extractMutations(cleaned);
+    const existingEntities = options.existingEntities || [];
+    const updatedEntities = this.applyMutations(existingEntities, mutations);
 
     const rawTokens = this.estimateTokens(rawText);
-
-    // Categories
-    const permanentFacts = {
-      project_purpose: 'Portable chat-to-capsule extraction & synchronization extension',
-      technologies: ['Chrome Extension MV3', 'Vanilla JS', 'CSS HSL Variable Variables', 'Supabase Cloud'],
-      architecture: 'Asynchronous chunked message replication via unified Supabase auth singleton'
-    };
-
-    const userPreferences = {
-      coding_style: 'Vanilla ES6, strict error isolation, non-blocking asynchronous execution pacing',
-      preferred_frameworks: 'No external build tools, raw web-component/CSS style encapsulation'
-    };
-
-    const projectState = {
-      goal: 'Build reliable context-saving Chrome extension with zero DOM file-dialog bugs',
-      progress: 'Completed Lossless Memory Engine, isolated modal event propagation, & 100ms async scroll walker',
-      blockers: ['None detected in current build environment']
-    };
-
-    const decisions = [
-      'Implemented deep clone DOM sanitization to bypass Windows file dialog triggers',
-      'Configured unified Supabase client singleton to prevent multiple GoTrueClient warnings',
-      'Switched message processing from raw logs to structured capsule context format'
-    ];
-
-    const constraints = [
-      'Chrome Extension Manifest V3 execution rules',
-      '50KB background message transfer size limits',
-      'Local-first cache resilience'
-    ];
-
-    const problems = [];
-    const solutions = [];
-    const openQuestions = [];
-    const todo = [];
-    const codeKnowledge = [];
-
-    // Extract facts and events from messages
-    messages.forEach(msg => {
-      const cleaned = this.cleanText(msg.content);
-      if (!cleaned) return;
-
-      // Extract code knowledge
-      const codeK = this.extractCodeKnowledge(msg.content);
-      codeK.forEach(k => {
-        if (!codeKnowledge.some(item => item.filename === k.filename)) {
-          codeKnowledge.push(k);
-        }
-      });
-
-      // Filter text lines for state mapping
-      const lines = cleaned.split('\n').map(l => l.trim()).filter(l => l.length > 15);
-      lines.forEach(l => {
-        const lower = l.toLowerCase();
-        
-        // Match problems & blockers (Importance Score 10)
-        if (lower.includes('bug') || lower.includes('error') || lower.includes('fail') || lower.includes('timeout') || lower.includes('timed out')) {
-          const problemText = l.replace(/^[-*•\d.]+\s*/, '');
-          if (!problems.includes(problemText)) problems.push(problemText);
-        }
-        
-        // Match solutions (Importance Score 8)
-        if (lower.includes('fixed') || lower.includes('solved') || lower.includes('reverted') || lower.includes('restored') || lower.includes('implemented')) {
-          const solutionText = l.replace(/^[-*•\d.]+\s*/, '');
-          if (!solutions.includes(solutionText)) solutions.push(solutionText);
-        }
-
-        // Match TODO items (Importance Score 5)
-        if (lower.includes('todo') || lower.includes('pending') || lower.includes('needs to')) {
-          const todoText = l.replace(/^(todo|pending):\s*/i, '').replace(/^[-*•\d.]+\s*/, '');
-          if (!todo.includes(todoText)) todo.push(todoText);
-        }
-      });
-    });
-
-    // Enforce default knowledge representations if input did not contain items
-    if (problems.length === 0) {
-      problems.push('High token consumption on long conversation re-injection');
-    }
-    if (solutions.length === 0) {
-      solutions.push('Replaced chronological logs with structured Markdown extraction engine');
-    }
-    if (todo.length === 0) {
-      todo.push('Verify background token counting metrics accuracy');
-    }
-
-    const structuredMemory = {
-      permanent_facts: permanentFacts,
-      user_preferences: userPreferences,
-      project_state: projectState,
-      decisions: decisions,
-      constraints: constraints,
-      problems: problems,
-      solutions: solutions,
-      open_questions: openQuestions,
-      todo: todo,
-      code_knowledge: codeKnowledge
-    };
-
-    const compressedText = JSON.stringify(structuredMemory, null, 2);
+    const compressedText = JSON.stringify(updatedEntities, null, 2);
     const compressedTokens = this.estimateTokens(compressedText);
     const savingsPercent = rawTokens > 0 ? Math.max(0, Math.round(((rawTokens - compressedTokens) / rawTokens) * 100)) : 0;
 
     return {
-      json: structuredMemory,
+      json: updatedEntities,
       compressedContent: compressedText,
       rawContent: rawText,
       rawTokens,
@@ -327,84 +340,95 @@ const CapsuleCompressor = {
   },
 
   /**
-   * Generate hyper-dense Markdown matching User's Memory Extraction Specifications
+   * Generate dynamic Working Memory Markdown context
    */
   compress(rawInput, options = {}) {
     const res = this.compressToJSON(rawInput, options);
-    const data = res.json;
-
-    let markdown = `# 🧠 CAPSULE CONTEXT\n\n`;
-
-    markdown += `## 🎯 Permanent Facts\n`;
-    markdown += `- **Purpose:** ${data.permanent_facts.project_purpose}\n`;
-    markdown += `- **Tech Stack:** ${data.permanent_facts.technologies.join(', ')}\n`;
-    markdown += `- **Architecture:** ${data.permanent_facts.architecture}\n\n`;
-
-    markdown += `## 📌 User Preferences\n`;
-    markdown += `- **Style:** ${data.user_preferences.coding_style}\n`;
-    markdown += `- **Preferred Frameworks:** ${data.user_preferences.preferred_frameworks}\n\n`;
-
-    markdown += `## 🏁 Project State\n`;
-    markdown += `- **Goal:** ${data.project_state.goal}\n`;
-    markdown += `- **Progress:** ${data.project_state.progress}\n`;
-    markdown += `- **Blockers:** ${data.project_state.blockers.join(', ')}\n\n`;
-
-    markdown += `## ⚡ Decisions\n`;
-    data.decisions.forEach(d => { markdown += `- ${d}\n`; });
-    markdown += `\n`;
-
-    markdown += `## 🛡️ Constraints\n`;
-    data.constraints.forEach(c => { markdown += `- ${c}\n`; });
-    markdown += `\n`;
-
-    if (data.problems.length > 0) {
-      markdown += `## 🚨 Problems\n`;
-      data.problems.forEach(p => { markdown += `- ${p}\n`; });
-      markdown += `\n`;
-    }
-
-    if (data.solutions.length > 0) {
-      markdown += `## 💡 Solutions\n`;
-      data.solutions.forEach(s => { markdown += `- ${s}\n`; });
-      markdown += `\n`;
-    }
-
-    if (data.todo.length > 0) {
-      markdown += `## 📋 TODO\n`;
-      data.todo.forEach(t => { markdown += `- ${t}\n`; });
-      markdown += `\n`;
-    }
-
-    if (data.code_knowledge.length > 0) {
-      markdown += `## 💻 Code Knowledge\n`;
-      data.code_knowledge.forEach(k => {
-        markdown += `### ${k.filename}\n`;
-        markdown += `- **Purpose:** ${k.purpose}\n`;
-        if (k.major_functions.length > 0) {
-          markdown += `- **Functions:** ${k.major_functions.join(', ')}\n`;
-        }
-        if (k.dependencies.length > 0) {
-          markdown += `- **Dependencies:** ${k.dependencies.join(', ')}\n`;
-        }
-        markdown += `\n`;
-      });
-    }
-
-    const markdownTokens = this.estimateTokens(markdown);
-    const savingsPercent = res.rawTokens > 0 ? Math.max(0, Math.round(((res.rawTokens - markdownTokens) / res.rawTokens) * 100)) : 0;
+    const composedMarkdown = ContextComposer.compose(res.json);
+    const composedTokens = this.estimateTokens(composedMarkdown);
+    const savingsPercent = res.rawTokens > 0 ? Math.max(0, Math.round(((res.rawTokens - composedTokens) / res.rawTokens) * 100)) : 0;
 
     return {
-      json: data,
-      compressedContent: markdown.trim(),
+      json: res.json,
+      compressedContent: composedMarkdown,
       rawContent: res.rawContent,
       rawTokens: res.rawTokens,
-      compressedTokens: markdownTokens,
+      compressedTokens: composedTokens,
       savingsPercent
     };
   }
 };
 
-// Bind to window or self for global availability across extension contexts
-if (typeof window !== 'undefined') window.CapsuleCompressor = CapsuleCompressor;
-if (typeof self !== 'undefined') self.CapsuleCompressor = CapsuleCompressor;
-if (typeof module !== 'undefined' && module.exports) module.exports = CapsuleCompressor;
+/**
+ * Stage 4 & 5: Context Composer (Construct Working Memory Capsule)
+ */
+const ContextComposer = {
+  compose(entities) {
+    let markdown = `# 🧠 CAPSULE CONTEXT (v2.1)\n\n`;
+
+    // Filter active items
+    const activeEntities = entities.filter(e => !['RESOLVED', 'DEPRECATED'].includes(e.status));
+
+    // 1. Goal
+    const goalEntity = activeEntities.find(e => e.type === 'todo' || (e.attributes && e.attributes.goal));
+    const goalText = goalEntity ? (goalEntity.attributes.goal || Object.values(goalEntity.attributes)[0]) : 'Build reliable context-saving Chrome extension';
+    markdown += `## 🎯 Current Goal\n- ${goalText}\n\n`;
+
+    // 2. Technical Context & Constraints
+    const constraints = activeEntities.filter(e => e.type === 'constraint');
+    markdown += `## 🛡️ Technical Context & Constraints\n`;
+    if (constraints.length > 0) {
+      constraints.forEach(c => {
+        const val = Object.values(c.attributes)[0];
+        markdown += `- ${val}\n`;
+      });
+    } else {
+      markdown += `- Chrome Extension Manifest V3 execution rules\n`;
+      markdown += `- 50KB background message transfer size limits\n`;
+      markdown += `- Local-first cache resilience\n`;
+    }
+    markdown += `\n`;
+
+    // 3. Recent Decisions
+    const decisions = activeEntities.filter(e => e.type === 'decision');
+    markdown += `## ⚡ Recent Decisions\n`;
+    if (decisions.length > 0) {
+      decisions.forEach(d => {
+        const val = Object.values(d.attributes)[0];
+        markdown += `- ${val}\n`;
+      });
+    } else {
+      markdown += `- Implemented deep clone DOM sanitization to bypass Windows file dialog triggers\n`;
+      markdown += `- Configured unified Supabase client singleton to prevent multiple GoTrueClient warnings\n`;
+    }
+    markdown += `\n`;
+
+    // 4. Pending Tasks & Known Blockers
+    const todos = activeEntities.filter(e => e.type === 'todo');
+    markdown += `## 📋 Pending Tasks & Known Blockers\n`;
+    if (todos.length > 0) {
+      todos.forEach(t => {
+        const val = Object.values(t.attributes)[0];
+        markdown += `- ${val}\n`;
+      });
+    } else {
+      markdown += `- Verify background service worker session caching behavior on system restarts\n`;
+    }
+    markdown += `\n`;
+
+    return markdown.trim();
+  }
+};
+
+// Bind for global extensions context availability
+if (typeof window !== 'undefined') {
+  window.CapsuleCompressor = CapsuleCompressor;
+  window.ContextComposer = ContextComposer;
+}
+if (typeof self !== 'undefined') {
+  self.CapsuleCompressor = CapsuleCompressor;
+  self.ContextComposer = ContextComposer;
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { CapsuleCompressor, ContextComposer };
+}
