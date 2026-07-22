@@ -51,8 +51,8 @@ const DOMAccumulator = {
         // Ingest before scroll
         ingestVisible();
 
-        // Step scroll position upwards incrementally (small steps keep virtualization stable)
-        container.scrollTop = Math.max(0, container.scrollTop - 400);
+        // Step scroll position upwards incrementally
+        container.scrollTop = Math.max(0, container.scrollTop - 800);
         container.dispatchEvent(new Event('scroll', { bubbles: true }));
 
         // Detect if scroll bounds are reached
@@ -66,8 +66,8 @@ const DOMAccumulator = {
           break; // Bottom/Top boundary reached
         }
 
-        // Wait 120ms to allow host virtualization to mount elements
-        await new Promise(resolve => setTimeout(resolve, 120));
+        // Wait 90ms to allow host virtualization to mount elements
+        await new Promise(resolve => setTimeout(resolve, 90));
         scrollAttempts++;
       }
     } finally {

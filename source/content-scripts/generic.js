@@ -859,7 +859,7 @@
     showToast('Capturing full chat history...', 'info');
     try {
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Capture timed out (8s)')), 8000)
+        setTimeout(() => reject(new Error('Capture timed out (15s)')), 15000)
       );
 
       const conv = await Promise.race([
