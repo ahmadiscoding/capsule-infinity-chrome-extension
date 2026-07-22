@@ -136,15 +136,71 @@ const CapsuleCompressor = {
   },
 
   /**
+   * Cleans and deduces user intent from first user message
+   */
+  deduceIntent(firstMsg) {
+    if (!firstMsg) return 'maintain conversation context';
+    const clean = firstMsg.trim().replace(/^[-*•\d.]+\s*/, '');
+    const lower = clean.toLowerCase();
+    
+    let processed = clean;
+    if (lower.startsWith('salam') || lower.startsWith('hello') || lower.startsWith('hi') || lower.startsWith('hey')) {
+      const lines = clean.split('\n');
+      const nextLine = lines.find(l => l.trim().length > 5 && !/^(hi|hello|hey|salam)/i.test(l.trim()));
+      if (nextLine) processed = nextLine.trim();
+    }
+    
+    return processed.split('\n')[0].trim().substring(0, 100);
+  },
+
+  /**
+   * Before extracting knowledge, ask: "If this sentence disappeared forever, would the project lose important knowledge?"
+   */
+  isImportantKnowledge(line) {
+    const lower = line.toLowerCase();
+    
+    // Discard short conversational expressions
+    if (lower.match(/^(ok|okay|yes|no|sure|certainly|thanks|thank you|hello|hi|hey|salam|greetings)/i)) {
+      if (lower.length < 30) return false;
+    }
+    
+    const techIndicators = [
+      'manifest', 'v3', 'chrome', 'extension', 'supabase', 'database', 'table', 'rls',
+      'uuid', 'chunk', 'token', 'compress', 'scroll', 'dom', 'picker', 'file',
+      'oauth', 'api', 'http', 'https', 'fetch', 'auth', 'cookie', 'session',
+      'javascript', 'css', 'html', 'git', 'revert', 'commit', 'push', 'json',
+      'error', 'bug', 'fail', 'fix', 'solve', 'resolved', 'implement', 'decide',
+      'must', 'constraint', 'limit', 'require', 'todo', 'pending', 'blocker',
+      'function', 'class', 'import', 'export', 'node', 'npm', 'react', 'next'
+    ];
+    
+    const containsTech = techIndicators.some(tech => lower.includes(tech));
+    const containsFile = lower.includes('.') || lower.includes('/') || lower.includes('\\');
+    
+    return containsTech || containsFile;
+  },
+
+  /**
    * Extract mutations from cleaned text deterministically
    */
   extractMutations(cleanedText, firstUserMsg = '') {
     const mutations = [];
     if (!cleanedText) return mutations;
 
-    const goalFallback = (firstUserMsg || cleanedText).split('\n')[0].trim().substring(0, 80);
-    const lines = cleanedText.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+    const goalFallback = this.deduceIntent(firstUserMsg || cleanedText);
+    const lines = cleanedText.split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 10 && this.isImportantKnowledge(l));
     const addedSentences = new Set();
+
+    // Enforce Goal
+    mutations.push({
+      action: 'UPSERT',
+      type: 'todo',
+      id: 'todo.conversation_goal',
+      attributes: { goal: goalFallback },
+      confidence: 0.95
+    });
 
     lines.forEach(line => {
       const lower = line.toLowerCase();
@@ -189,12 +245,15 @@ const CapsuleCompressor = {
       } else if (lower.includes('bug') || lower.includes('error') || lower.includes('fail') || lower.includes('issue') || lower.includes('blocker')) {
         type = 'bug';
         attrKey = 'blocker';
-      } else if (lower.includes('decide') || lower.includes('choose') || lower.includes('chose') || lower.includes('implement') || lower.includes('prefer') || lower.includes('switch') || lower.includes('adopt')) {
+      } else if (lower.includes('decide') || lower.includes('choose') || lower.includes('chose') || lower.includes('implement') || lower.includes('prefer') || lower.includes('switch') || lower.includes('adopt') || lower.includes('select')) {
         type = 'decision';
         attrKey = 'decision';
-      } else if (lower.includes('must ') || lower.includes('restrict') || lower.includes('limit') || lower.includes('constraint') || lower.includes('rule') || lower.includes('framework') || lower.includes('library') || lower.includes('stack') || lower.includes('api')) {
+      } else if (lower.includes('must') || lower.includes('restrict') || lower.includes('limit') || lower.includes('constraint') || lower.includes('rule') || lower.includes('require')) {
         type = 'constraint';
         attrKey = 'constraint';
+      } else {
+        type = 'preference';
+        attrKey = 'detail';
       }
 
       if (type && !addedSentences.has(lower)) {
@@ -210,28 +269,6 @@ const CapsuleCompressor = {
         });
       }
     });
-
-    if (mutations.length === 0) {
-      mutations.push({
-        action: 'UPSERT',
-        type: 'todo',
-        id: 'todo.conversation_goal',
-        attributes: { goal: goalFallback || 'Explore conversation context' },
-        confidence: 0.90
-      });
-
-      const firstLines = lines.slice(0, 3);
-      firstLines.forEach((line, idx) => {
-        const cleanVal = line.replace(/^[-*•\d.]+\s*/, '').trim();
-        mutations.push({
-          action: 'UPSERT',
-          type: idx === 0 ? 'decision' : 'constraint',
-          id: `general.context_${idx}`,
-          attributes: { detail: cleanVal },
-          confidence: 0.80
-        });
-      });
-    }
 
     return mutations;
   },
@@ -392,7 +429,7 @@ const CapsuleCompressor = {
    */
   compress(rawInput, options = {}) {
     const res = this.compressToJSON(rawInput, options);
-    const composedMarkdown = ContextComposer.compose(res.json);
+    const composedMarkdown = ContextComposer.compose(res.json, options);
     const composedTokens = this.estimateTokens(composedMarkdown);
     const savingsPercent = res.rawTokens > 0 ? Math.max(0, Math.round(((res.rawTokens - composedTokens) / res.rawTokens) * 100)) : 0;
 
@@ -411,62 +448,70 @@ const CapsuleCompressor = {
  * Stage 4 & 5: Context Composer (Construct Working Memory Capsule)
  */
 const ContextComposer = {
-  compose(entities) {
-    let markdown = `# 🧠 CAPSULE CONTEXT (v2.1)\n\n`;
+  joinSentences(list) {
+    if (!list || list.length === 0) return '';
+    const cleaned = list.map(item => {
+      let text = item.trim();
+      if (text.endsWith('.')) text = text.slice(0, -1);
+      return text;
+    });
+    if (cleaned.length === 1) return cleaned[0] + '.';
+    if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}.`;
+    return `${cleaned.slice(0, -1).join(', ')}, and ${cleaned[cleaned.length - 1]}.`;
+  },
 
+  compose(entities, options = {}) {
     const activeEntities = entities.filter(e => !['RESOLVED', 'DEPRECATED'].includes(e.status));
 
-    // 1. Goal
-    const goalEntity = activeEntities.find(e => e.type === 'todo' && (e.attributes.goal || e.attributes.task));
-    const goalText = goalEntity ? (goalEntity.attributes.goal || goalEntity.attributes.task) : 'Explore conversation context';
-    markdown += `## 🎯 Current Goal\n- ${goalText}\n\n`;
-
-    // 2. Technical Context & Constraints
-    const constraints = activeEntities.filter(e => e.type === 'constraint');
-    markdown += `## 🛡️ Technical Context & Constraints\n`;
-    if (constraints.length > 0) {
-      constraints.forEach(c => {
-        const val = Object.values(c.attributes)[0];
-        markdown += `- ${val}\n`;
-      });
-    } else {
-      markdown += `- General information exchange and research guidance\n`;
+    // 1. User Intent
+    const goalEntity = activeEntities.find(e => e.type === 'todo' && (e.id === 'todo.conversation_goal' || e.attributes.goal));
+    let intentText = goalEntity ? (goalEntity.attributes.goal || Object.values(goalEntity.attributes)[0]) : '';
+    if (!intentText) {
+      intentText = 'discuss and resolve project requirements';
     }
-    markdown += `\n`;
-
-    // 3. Recent Decisions
-    const decisions = activeEntities.filter(e => e.type === 'decision');
-    markdown += `## ⚡ Recent Decisions\n`;
-    if (decisions.length > 0) {
-      decisions.forEach(d => {
-        const val = Object.values(d.attributes)[0];
-        markdown += `- ${val}\n`;
-      });
-    } else {
-      markdown += `- Gather roadmap details and key learning concepts\n`;
+    if (!intentText.toLowerCase().startsWith('the user wants')) {
+      intentText = `The user wants to ${intentText.charAt(0).toLowerCase() + intentText.slice(1)}`;
     }
-    markdown += `\n`;
+    if (!intentText.endsWith('.')) intentText += '.';
 
-    // 4. Pending Tasks & Known Blockers
-    const todos = activeEntities.filter(e => e.type === 'todo' && e.id !== 'todo.conversation_goal');
-    const bugs = activeEntities.filter(e => e.type === 'bug');
-    markdown += `## 📋 Pending Tasks & Known Blockers\n`;
-    
-    if (todos.length > 0 || bugs.length > 0) {
-      todos.forEach(t => {
-        const val = Object.values(t.attributes)[0];
-        markdown += `- Pending: ${val}\n`;
-      });
-      bugs.forEach(b => {
-        const val = Object.values(b.attributes)[0];
-        markdown += `- Blocker: ${val}\n`;
-      });
-    } else {
-      markdown += `- Synthesize AI guidance into structured learning track\n`;
-    }
-    markdown += `\n`;
+    // 2. Key Decisions
+    const decisions = activeEntities.filter(e => e.type === 'decision')
+      .map(d => Object.values(d.attributes)[0])
+      .filter(Boolean);
+    const decisionsText = decisions.length > 0 
+      ? this.joinSentences(decisions) 
+      : 'No key decisions finalized in this session.';
 
-    return markdown.trim();
+    // 3. Constraints or requirements
+    const constraints = activeEntities.filter(e => e.type === 'constraint')
+      .map(c => Object.values(c.attributes)[0])
+      .filter(Boolean);
+    const constraintsText = constraints.length > 0 
+      ? this.joinSentences(constraints) 
+      : 'No explicit constraints identified.';
+
+    // 4. Technicalities / Details
+    const techDetails = [];
+    activeEntities.forEach(e => {
+      if (e.type === 'preference' || e.type === 'generic' || e.type === 'bug') {
+        const val = Object.values(e.attributes)[0];
+        if (val) techDetails.push(val);
+      }
+    });
+    const techText = techDetails.length > 0 
+      ? this.joinSentences(techDetails) 
+      : 'No technical details specified.';
+
+    let markdown = `**ACTIVE CAPSULE CONTEXT**\n\n`;
+    markdown += `• **User Intent**: ${intentText}\n\n`;
+    markdown += `• **Key decisions made**: ${decisionsText}\n\n`;
+    markdown += `• **Constraints or requirements identified**: ${constraintsText}\n\n`;
+    markdown += `• **Technicalities/Details**: ${techText}\n\n`;
+
+    const title = options.title || 'Conversation';
+    markdown += `**ACTIVE CAPSULE CONTEXT:${title.substring(0, 40)}...**`;
+
+    return markdown;
   }
 };
 

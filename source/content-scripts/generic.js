@@ -717,7 +717,7 @@
 
     let compressedObj = { compressedContent: rawFormatted, savingsPercent: 0, rawTokens: 0, compressedTokens: 0 };
     if (typeof CapsuleCompressor !== 'undefined') {
-      compressedObj = CapsuleCompressor.compress(messages);
+      compressedObj = CapsuleCompressor.compress(messages, { title: title });
     }
 
     return {
