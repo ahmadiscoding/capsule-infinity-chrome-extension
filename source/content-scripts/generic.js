@@ -801,7 +801,7 @@
               <button type="button" class="ci-btn" id="ci-btn-mode-compressed" style="padding:4px 10px;font-size:11px;background:#6366f1;color:#fff;border-radius:6px;border:none;cursor:pointer;">⚡ Compressed (Recommended)</button>
               <button type="button" class="ci-btn" id="ci-btn-mode-raw" style="padding:4px 10px;font-size:11px;background:rgba(255,255,255,0.08);color:#94a3b8;border-radius:6px;border:none;cursor:pointer;">📄 Raw Transcript</button>
             </div>
-            <textarea class="ci-form-textarea" id="ci-cap-content">${CapsuleUtils.sanitize(conv.compressedContent || conv.content)}</textarea>
+            <textarea class="ci-form-textarea" id="ci-cap-content" placeholder="Loading content..."></textarea>
             <div class="ci-char-count" id="ci-charcount">${CapsuleUtils.wordCount(conv.compressedContent || conv.content)} words</div>
           </div>
           <div class="ci-form-group">
@@ -831,13 +831,24 @@
     const btnRaw = overlay.querySelector('#ci-btn-mode-raw');
     const tokenBadge = overlay.querySelector('#ci-token-badge');
 
+    let currentFullContent = conv.compressedContent || conv.content;
+
+    // Asynchronously set initial content to prevent UI freezing
+    setTimeout(() => {
+      contentTextarea.value = currentFullContent.slice(0, 30000);
+      charCountEl.innerText = `${CapsuleUtils.wordCount(currentFullContent)} words`;
+    }, 20);
+
     btnCompressed.addEventListener('click', () => {
       btnCompressed.style.background = '#6366f1';
       btnCompressed.style.color = '#fff';
       btnRaw.style.background = 'rgba(255,255,255,0.08)';
       btnRaw.style.color = '#94a3b8';
-      contentTextarea.value = conv.compressedContent || conv.content;
-      charCountEl.innerText = `${CapsuleUtils.wordCount(contentTextarea.value)} words`;
+      currentFullContent = conv.compressedContent || conv.content;
+      setTimeout(() => {
+        contentTextarea.value = currentFullContent.slice(0, 30000);
+        charCountEl.innerText = `${CapsuleUtils.wordCount(currentFullContent)} words`;
+      }, 20);
       if (tokenBadge) tokenBadge.style.display = 'inline-block';
     });
 
@@ -846,8 +857,11 @@
       btnRaw.style.color = '#fff';
       btnCompressed.style.background = 'rgba(255,255,255,0.08)';
       btnCompressed.style.color = '#94a3b8';
-      contentTextarea.value = conv.rawContent || conv.content;
-      charCountEl.innerText = `${CapsuleUtils.wordCount(contentTextarea.value)} words`;
+      currentFullContent = conv.rawContent || conv.content;
+      setTimeout(() => {
+        contentTextarea.value = currentFullContent.slice(0, 30000);
+        charCountEl.innerText = `${CapsuleUtils.wordCount(currentFullContent)} words`;
+      }, 20);
       if (tokenBadge) tokenBadge.style.display = 'none';
     });
 
@@ -888,9 +902,10 @@
       );
     }
 
-    // Word count
+    // Word count / update currentFullContent on edit
     overlay.querySelector('#ci-cap-content').addEventListener('input', e => {
-      document.getElementById('ci-charcount').textContent = CapsuleUtils.wordCount(e.target.value) + ' words';
+      currentFullContent = e.target.value;
+      document.getElementById('ci-charcount').textContent = CapsuleUtils.wordCount(currentFullContent) + ' words';
     });
 
     async function saveCapsuleViaBackground(capsuleData) {
@@ -965,7 +980,7 @@
       }
 
       const title = overlay.querySelector('#ci-cap-title').value.trim() || 'Untitled';
-      const content = overlay.querySelector('#ci-cap-content').value.trim();
+      const content = currentFullContent.trim();
       if (!content) { showToast('Content is required', 'error'); return null; }
 
       // Prepend Systemic AI Context to the content
