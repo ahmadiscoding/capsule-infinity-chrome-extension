@@ -61,31 +61,31 @@
   "content_scripts": [
     {
       "matches": ["https://chatgpt.com/*"],
-      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/chatgpt.js"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/compressor.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/chatgpt.js"],
       "css": ["shared/inject.css"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://claude.ai/*"],
-      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/claude.js"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/compressor.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/claude.js"],
       "css": ["shared/inject.css"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://gemini.google.com/*"],
-      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/gemini.js"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/compressor.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/gemini.js"],
       "css": ["shared/inject.css"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://chat.deepseek.com/*"],
-      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/deepseek.js"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/compressor.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/deepseek.js"],
       "css": ["shared/inject.css"],
       "run_at": "document_start"
     },
     {
       "matches": ["https://mail.google.com/*"],
-      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/gmail.js"],
+      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/compressor.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/gmail.js"],
       "css": ["shared/inject.css"],
       "run_at": "document_start"
     },

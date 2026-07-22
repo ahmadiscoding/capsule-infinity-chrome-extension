@@ -588,7 +588,7 @@
 
     let accumulatedMessages = [];
     let scrollAttempts = 0;
-    const maxAttempts = 30; // Safety limit
+    const maxAttempts = 40; // Extended safety limit for deep chats
     let noNewContentCount = 0;
 
     const originalScrollTop = container.scrollTop;
@@ -611,16 +611,22 @@
         }
       }
 
-      // 2. Scroll to top to trigger lazy load
+      // 2. Trigger platform-specific load buttons if present
+      try {
+        const loadMoreBtns = document.querySelectorAll('button[aria-label*="load" i], button[aria-label*="older" i], button[aria-label*="previous" i]');
+        loadMoreBtns.forEach(btn => { if (btn && btn.offsetWidth > 0) btn.click(); });
+      } catch(e) {}
+
+      // 3. Scroll to top to trigger lazy-load virtual scroll lists
       container.scrollTop = 0;
       container.dispatchEvent(new Event('scroll', { bubbles: true }));
 
-      // 3. Pause for rendering
-      await new Promise(resolve => setTimeout(resolve, 400));
+      // 4. Pause for rendering
+      await new Promise(resolve => setTimeout(resolve, 300));
       scrollAttempts++;
     }
 
-    // Restore scroll position
+    // Restore original scroll position so user experience is uninterrupted
     container.scrollTop = originalScrollTop;
 
     return accumulatedMessages;
@@ -632,9 +638,15 @@
       const from = document.querySelector('.go .gD')?.getAttribute('email') || '';
       const body = document.querySelector('.a3s.aiL, .ii.gt')?.innerText?.trim() || '';
       if (body) {
+        const content = `From: ${from}\nSubject: ${subject}\n---\n${body}`;
         return {
           title: `Email: ${subject || 'No Subject'}`,
-          content: `From: ${from}\nSubject: ${subject}\n---\n${body}`,
+          content: content,
+          rawContent: content,
+          compressedContent: content,
+          savingsPercent: 0,
+          rawTokens: CapsuleCompressor ? CapsuleCompressor.estimateTokens(content) : 0,
+          compressedTokens: CapsuleCompressor ? CapsuleCompressor.estimateTokens(content) : 0,
           messageCount: 1,
           platform: PLATFORM
         };
@@ -649,19 +661,29 @@
       if (main) {
         const text = main.innerText?.trim();
         if (text && text.length > 20) {
-          return { title: document.title || 'Conversation', content: text.substring(0, 100000), messageCount: 1, platform: PLATFORM };
+          return { title: document.title || 'Conversation', content: text.substring(0, 100000), rawContent: text, compressedContent: text, messageCount: 1, platform: PLATFORM };
         }
       }
       return null;
     }
 
-    const formatted = messages.map(m => `[${m.role.toUpperCase()}]:\n${m.content}`).join('\n\n---\n\n');
+    const rawFormatted = messages.map(m => `[${m.role.toUpperCase()}]:\n${m.content}`).join('\n\n---\n\n').substring(0, 100000);
     const firstUser = messages.find(m => m.role === 'user');
     const title = firstUser ? firstUser.content.substring(0, 80).split('\n')[0] : document.title;
 
+    let compressedObj = { compressedContent: rawFormatted, savingsPercent: 0, rawTokens: 0, compressedTokens: 0 };
+    if (typeof CapsuleCompressor !== 'undefined') {
+      compressedObj = CapsuleCompressor.compress(messages);
+    }
+
     return {
       title: title || `${CapsuleUtils.getPlatformInfo(PLATFORM).name} Chat`,
-      content: formatted.substring(0, 100000),
+      content: compressedObj.compressedContent,
+      rawContent: rawFormatted,
+      compressedContent: compressedObj.compressedContent,
+      savingsPercent: compressedObj.savingsPercent,
+      rawTokens: compressedObj.rawTokens,
+      compressedTokens: compressedObj.compressedTokens,
       messageCount: messages.length,
       platform: PLATFORM
     };
@@ -713,6 +735,8 @@
     overlay.id = 'ci-capture-modal';
     const pi = CapsuleUtils.getPlatformInfo(PLATFORM);
 
+    const savingsText = conv.savingsPercent > 0 ? `⚡ ${conv.savingsPercent}% Tokens Saved (~${conv.compressedTokens} tokens)` : '';
+
     overlay.innerHTML = `
       <div class="ci-modal">
         <div class="ci-modal-header">
@@ -725,9 +749,16 @@
             <input class="ci-form-input" id="ci-cap-title" value="${CapsuleUtils.sanitize(conv.title)}" placeholder="Name your capsule..." />
           </div>
           <div class="ci-form-group">
-            <label class="ci-form-label">Content <span class="ci-platform-badge" style="background:${pi.color}20;color:${pi.color};margin-left:8px;">${pi.icon} ${pi.name} \u00B7 ${conv.messageCount} messages</span></label>
-            <textarea class="ci-form-textarea" id="ci-cap-content">${CapsuleUtils.sanitize(conv.content)}</textarea>
-            <div class="ci-char-count" id="ci-charcount">${CapsuleUtils.wordCount(conv.content)} words</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <label class="ci-form-label" style="margin:0;">Content <span class="ci-platform-badge" style="background:${pi.color}20;color:${pi.color};margin-left:6px;">${pi.icon} ${pi.name} \u00B7 ${conv.messageCount} messages</span></label>
+              <span id="ci-token-badge" style="font-size:10px;font-weight:600;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 8px;border-radius:10px;">${savingsText}</span>
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;">
+              <button type="button" class="ci-btn" id="ci-btn-mode-compressed" style="padding:4px 10px;font-size:11px;background:#6366f1;color:#fff;border-radius:6px;border:none;cursor:pointer;">⚡ Compressed (Recommended)</button>
+              <button type="button" class="ci-btn" id="ci-btn-mode-raw" style="padding:4px 10px;font-size:11px;background:rgba(255,255,255,0.08);color:#94a3b8;border-radius:6px;border:none;cursor:pointer;">📄 Raw Transcript</button>
+            </div>
+            <textarea class="ci-form-textarea" id="ci-cap-content">${CapsuleUtils.sanitize(conv.compressedContent || conv.content)}</textarea>
+            <div class="ci-char-count" id="ci-charcount">${CapsuleUtils.wordCount(conv.compressedContent || conv.content)} words</div>
           </div>
           <div class="ci-form-group">
             <label class="ci-form-label">Folder</label>
@@ -749,6 +780,32 @@
       </div>`;
 
     document.body.appendChild(overlay);
+
+    const contentTextarea = overlay.querySelector('#ci-cap-content');
+    const charCountEl = overlay.querySelector('#ci-charcount');
+    const btnCompressed = overlay.querySelector('#ci-btn-mode-compressed');
+    const btnRaw = overlay.querySelector('#ci-btn-mode-raw');
+    const tokenBadge = overlay.querySelector('#ci-token-badge');
+
+    btnCompressed.addEventListener('click', () => {
+      btnCompressed.style.background = '#6366f1';
+      btnCompressed.style.color = '#fff';
+      btnRaw.style.background = 'rgba(255,255,255,0.08)';
+      btnRaw.style.color = '#94a3b8';
+      contentTextarea.value = conv.compressedContent || conv.content;
+      charCountEl.innerText = `${CapsuleUtils.wordCount(contentTextarea.value)} words`;
+      if (tokenBadge) tokenBadge.style.display = 'inline-block';
+    });
+
+    btnRaw.addEventListener('click', () => {
+      btnRaw.style.background = '#6366f1';
+      btnRaw.style.color = '#fff';
+      btnCompressed.style.background = 'rgba(255,255,255,0.08)';
+      btnCompressed.style.color = '#94a3b8';
+      contentTextarea.value = conv.rawContent || conv.content;
+      charCountEl.innerText = `${CapsuleUtils.wordCount(contentTextarea.value)} words`;
+      if (tokenBadge) tokenBadge.style.display = 'none';
+    });
 
     // Load folders
     loadFolders();

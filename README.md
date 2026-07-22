@@ -32,6 +32,8 @@ Brainstorming or debugging code across different model engines (e.g. migrating a
 
 ![Feature Cards](source/assets/banners/feature_banner.svg)
 
+* **Lossless Context Compression Engine**: Automatically transforms long, fluff-filled AI transcripts into hyper-dense `# 🧠 CAPSULE CONTEXT` markdown, saving 80-90% of tokens while preserving 100% of code, exact variable names, and technical decisions.
+* **Auto-Scroll Complete Scraper**: Smoothly scrolls dynamic containers to the top before capturing to guarantee 100% chat history coverage from message 1.
 * **Asynchronous Chunking Pipeline**: Splits large payloads into 50KB segments to safely navigate browser messaging thresholds.
 * **Lazy-Load Scraping Engine**: Safely queries DOM structures, gracefully handling dynamic list changes.
 * **Supabase Cloud Sync**: Instantiates Supabase connection over authenticated PKCE Google OAuth sessions.
