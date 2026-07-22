@@ -592,6 +592,83 @@
       return null;
     },
 
+    async tryTier2ForceLoadAndSelectAll(container) {
+      let mountedCount = 0;
+      let observer = null;
+
+      const getMessageElements = () => {
+        if (PLATFORM === 'chatgpt') {
+          return document.querySelectorAll('[data-message-author-role]');
+        } else if (PLATFORM === 'claude') {
+          return document.querySelectorAll('[class*="message"], [data-testid*="message"]');
+        } else if (PLATFORM === 'gemini') {
+          return document.querySelectorAll('.query-content, message-content, [class*="message"]');
+        } else {
+          return document.querySelectorAll('[data-message-author-role], [class*="message"], [class*="query"]');
+        }
+      };
+
+      mountedCount = getMessageElements().length;
+
+      if (typeof MutationObserver !== 'undefined') {
+        observer = new MutationObserver(() => {
+          mountedCount = getMessageElements().length;
+        });
+        observer.observe(container, { childList: true, subtree: true });
+      }
+
+      const originalScrollTop = container.scrollTop;
+      let scrollAttempts = 0;
+      const maxAttempts = 100;
+      let noNewContentCount = 0;
+      let emptyMutationCount = 0;
+      let lastMountedCount = mountedCount;
+
+      try {
+        while (scrollAttempts < maxAttempts) {
+          const prevScrollTop = container.scrollTop;
+
+          // Aggressive scroll up
+          container.scrollTop = Math.max(0, container.scrollTop - 1500);
+          container.dispatchEvent(new Event('scroll', { bubbles: true }));
+
+          if (mountedCount === lastMountedCount) {
+            emptyMutationCount++;
+          } else {
+            emptyMutationCount = 0;
+            lastMountedCount = mountedCount;
+          }
+
+          if (container.scrollTop === prevScrollTop || container.scrollTop === 0) {
+            noNewContentCount++;
+          } else {
+            noNewContentCount = 0;
+          }
+
+          if (noNewContentCount >= 2 && emptyMutationCount >= 5) {
+            break;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 50));
+          scrollAttempts++;
+        }
+
+        const rawText = container.innerText || container.textContent || '';
+        const blocksCount = (rawText.match(/^(You|Gemini|Claude|ChatGPT|User|Assistant|System)\s+said:?/gim) || []).length;
+        const ratio = mountedCount > 0 ? (blocksCount / mountedCount) : 1;
+
+        if (mountedCount > 4 && (ratio < 0.7 || ratio > 1.4)) {
+          console.warn(`[Tier 2 Sanity Check] Mismatch: blocksCount=${blocksCount}, mountedCount=${mountedCount}. Falling through to Tier 3.`);
+          throw new Error('Virtualized trimming detected');
+        }
+
+        return rawText;
+      } finally {
+        if (observer) observer.disconnect();
+        container.scrollTop = originalScrollTop;
+      }
+    },
+
     async fallbackDOMAccumulation(container) {
       if (typeof DOMAccumulator === 'undefined') {
         console.warn('[Capsule Extractor] DOMAccumulator script not loaded, using legacy walker.');
@@ -603,10 +680,15 @@
         return `${msg.role}_${msg.content.substring(0, 100)}`;
       };
 
+      const progressCallback = (count) => {
+        showToast(`Captured ${count} messages so far...`, 'info');
+      };
+
       return await DOMAccumulator.accumulate(
         container, 
         extractCurrentVisibleMessages, 
-        getMessageKey
+        getMessageKey,
+        progressCallback
       );
     },
 
@@ -639,21 +721,36 @@
     },
 
     async extract() {
+      // Tier 1: Network Capture
       try {
         const apiMessages = await this.tryNetworkExtraction();
         if (apiMessages && apiMessages.length > 0) {
-          console.log('[Capsule Extractor] Using Primary Route (Network Interception).');
+          console.log('[Capsule Extractor] Using Tier 1 (Network Interception).');
           return apiMessages;
         }
       } catch (err) {
-        console.warn('[Capsule Extractor] Primary route fetch failed:', err);
+        console.warn('[Capsule Extractor] Tier 1 network fetch failed:', err);
       }
 
-      console.log('[Capsule Extractor] Falling back to DOM Accumulator.');
       const container = findScrollContainer();
       if (!container) {
         return extractCurrentVisibleMessages();
       }
+
+      // Tier 2: Force-Load & Select-All
+      try {
+        console.log('[Capsule Extractor] Attempting Tier 2: Force-Load + Select-All.');
+        const tier2Text = await this.tryTier2ForceLoadAndSelectAll(container);
+        if (tier2Text) {
+          console.log('[Capsule Extractor] Using Tier 2: Force-Load + Select-All.');
+          return tier2Text;
+        }
+      } catch (err) {
+        console.warn('[Capsule Extractor] Tier 2 fallback triggered due to:', err.message);
+      }
+
+      // Tier 3: Scroll-Accumulate (Last Resort)
+      console.log('[Capsule Extractor] Using Tier 3: Scroll-Accumulate.');
       return await this.fallbackDOMAccumulation(container);
     }
   };
@@ -811,9 +908,9 @@
       return null;
     }
 
-    const messages = await fetchFullChatHistory();
+    const messagesOrText = await fetchFullChatHistory();
 
-    if (messages.length === 0) {
+    if (!messagesOrText || messagesOrText.length === 0) {
       const main = document.querySelector('main, [role="main"], .conversation');
       if (main) {
         const text = getSanitizedText(main);
@@ -824,11 +921,22 @@
       return null;
     }
 
-    const rawFormatted = messages.map(m => `[${m.role.toUpperCase()}]:\n${m.content}`).join('\n\n---\n\n').substring(0, 100000);
-    const firstUser = messages.find(m => m.role === 'user');
-    let rawTitle = firstUser ? firstUser.content.substring(0, 80).split('\n')[0] : document.title;
-    
-    // Clean conversational labels like "You said" from title
+    let rawFormatted = '';
+    let messageCount = 0;
+    let titleSrc = '';
+
+    if (Array.isArray(messagesOrText)) {
+      rawFormatted = messagesOrText.map(m => `[${m.role.toUpperCase()}]:\n${m.content}`).join('\n\n---\n\n').substring(0, 100000);
+      messageCount = messagesOrText.length;
+      const firstUser = messagesOrText.find(m => m.role === 'user');
+      titleSrc = firstUser ? firstUser.content : document.title;
+    } else {
+      rawFormatted = String(messagesOrText).substring(0, 100000);
+      messageCount = (rawFormatted.match(/\[(USER|ASSISTANT|SYSTEM|YOU|GEMINI|CLAUDE|CHATGPT)\]:/gi) || []).length || 1;
+      titleSrc = document.title || 'Captured Conversation';
+    }
+
+    let rawTitle = titleSrc.substring(0, 80).split('\n')[0];
     let title = rawTitle.replace(/^(You|Gemini|Claude|ChatGPT|User|Assistant)\s+said:?\s*/i, '').trim();
     if (!title || title.toLowerCase() === 'you said') {
       title = `${CapsuleUtils.getPlatformInfo(PLATFORM).name} Chat`;
@@ -836,7 +944,7 @@
 
     let compressedObj = { compressedContent: rawFormatted, savingsPercent: 0, rawTokens: 0, compressedTokens: 0 };
     if (typeof CapsuleCompressor !== 'undefined') {
-      compressedObj = CapsuleCompressor.compress(messages, { title: title });
+      compressedObj = CapsuleCompressor.compress(messagesOrText, { title: title });
     }
 
     return {
@@ -847,7 +955,7 @@
       savingsPercent: compressedObj.savingsPercent,
       rawTokens: compressedObj.rawTokens,
       compressedTokens: compressedObj.compressedTokens,
-      messageCount: messages.length,
+      messageCount: messageCount,
       platform: PLATFORM
     };
   }
@@ -858,14 +966,7 @@
   async function handleCapture() {
     showToast('Capturing full chat history...', 'info');
     try {
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Capture timed out (15s)')), 15000)
-      );
-
-      const conv = await Promise.race([
-        extractConversationAsync(),
-        timeoutPromise
-      ]);
+      const conv = await extractConversationAsync();
 
       if (!conv || !conv.content) {
         showToast('No conversation found to capture', 'error');

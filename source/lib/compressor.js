@@ -476,55 +476,74 @@ const ContextComposer = {
   compose(entities, options = {}) {
     const activeEntities = entities.filter(e => !['RESOLVED', 'DEPRECATED'].includes(e.status));
 
-    // 1. User Intent
+    // 1. User Intent / Goal
     const goalEntity = activeEntities.find(e => e.type === 'todo' && (e.id === 'todo.conversation_goal' || e.attributes.goal));
-    let intentText = goalEntity ? (goalEntity.attributes.goal || Object.values(goalEntity.attributes)[0]) : '';
-    if (!intentText) {
-      intentText = 'discuss and resolve project requirements';
+    let goalText = goalEntity ? (goalEntity.attributes.goal || Object.values(goalEntity.attributes)[0]) : '';
+    if (!goalText) {
+      goalText = 'Discuss and resolve project requirements';
     }
-    if (!intentText.toLowerCase().startsWith('the user wants')) {
-      intentText = `The user wants to ${intentText.charAt(0).toLowerCase() + intentText.slice(1)}`;
-    }
-    if (!intentText.endsWith('.')) intentText += '.';
 
-    // 2. Key Decisions
+    // Capitalize and format topic title
+    let topicTitle = goalText.replace(/^The user wants to /i, '');
+    topicTitle = topicTitle.charAt(0).toUpperCase() + topicTitle.slice(1);
+    if (topicTitle.endsWith('.')) topicTitle = topicTitle.slice(0, -1);
+
+    // 2. Decisions & Recommendations
     const decisions = activeEntities.filter(e => e.type === 'decision')
       .map(d => Object.values(d.attributes)[0])
       .filter(Boolean);
-    const decisionsText = decisions.length > 0 
-      ? this.joinSentences(decisions) 
-      : 'No key decisions finalized in this session.';
+    
+    const isDecision = decisions.length > 0;
+    const typeText = isDecision ? 'Decision' : 'Advisory';
+    
+    const decisionsText = isDecision 
+      ? this.joinSentences(decisions)
+      : 'Recommended implementation path presented to user and confirmed.';
 
-    // 3. Constraints or requirements
+    // 3. Constraints
     const constraints = activeEntities.filter(e => e.type === 'constraint')
       .map(c => Object.values(c.attributes)[0])
       .filter(Boolean);
     const constraintsText = constraints.length > 0 
       ? this.joinSentences(constraints) 
-      : 'No explicit constraints identified.';
+      : '';
 
-    // 4. Technicalities / Details
+    // 4. Facts/Criteria
     const techDetails = [];
     activeEntities.forEach(e => {
-      if (e.type === 'preference' || e.type === 'generic' || e.type === 'bug') {
+      if (e.type === 'preference' || e.type === 'generic') {
         const val = Object.values(e.attributes)[0];
         if (val) techDetails.push(val);
       }
     });
-    const techText = techDetails.length > 0 
+    const factsText = techDetails.length > 0 
       ? this.joinSentences(techDetails) 
-      : 'No technical details specified.';
+      : 'Standard specifications utilized.';
 
-    let markdown = `**ACTIVE CAPSULE CONTEXT**\n\n`;
-    markdown += `• **User Intent**: ${intentText}\n\n`;
-    markdown += `• **Key decisions made**: ${decisionsText}\n\n`;
-    markdown += `• **Constraints or requirements identified**: ${constraintsText}\n\n`;
-    markdown += `• **Technicalities/Details**: ${techText}\n\n`;
+    // 5. Open/Next
+    const todos = activeEntities.filter(e => e.type === 'todo' && e.id !== 'todo.conversation_goal')
+      .map(t => Object.values(t.attributes)[0]);
+    const bugs = activeEntities.filter(e => e.type === 'bug')
+      .map(b => Object.values(b.attributes)[0]);
+    const openNextList = [...todos.map(t => `Pending task ${t}`), ...bugs.map(b => `Blocker ${b}`)];
+    const openNextText = openNextList.length > 0 ? this.joinSentences(openNextList) : '';
 
-    const title = options.title || 'Conversation';
-    markdown += `**ACTIVE CAPSULE CONTEXT:${title.substring(0, 40)}...**`;
+    const capsuleTitle = options.title || topicTitle;
 
-    return markdown;
+    let markdown = `**CAPSULE: ${capsuleTitle}**\n\n`;
+    markdown += `## ${topicTitle}\n`;
+    markdown += `Type: ${typeText}\n`;
+    markdown += `Goal: ${goalText}\n`;
+    markdown += `Facts/Criteria: ${factsText}\n`;
+    markdown += `Result: ${decisionsText}\n`;
+    if (constraintsText) {
+      markdown += `Constraints: ${constraintsText}\n`;
+    }
+    if (openNextText) {
+      markdown += `Open/Next: ${openNextText}\n`;
+    }
+
+    return markdown.trim();
   }
 };
 
