@@ -633,7 +633,7 @@
 
     let accumulatedMessages = [];
     let scrollAttempts = 0;
-    const maxAttempts = 30; // 8-second safety ceiling
+    const maxAttempts = 30; // Safety ceiling
     let noNewContentCount = 0;
 
     const originalScrollTop = container.scrollTop;
@@ -643,22 +643,25 @@
       const previousLength = accumulatedMessages.length;
       accumulatedMessages = mergeMessages(currentMessages, accumulatedMessages);
 
-      if (accumulatedMessages.length === previousLength) {
-        noNewContentCount++;
-      } else {
-        noNewContentCount = 0;
-      }
-
-      if (container.scrollTop === 0 && noNewContentCount >= 2) {
-        break; // Reached top of chat thread
-      }
+      const lastScrollTop = container.scrollTop;
 
       // Step scrollTop upwards smoothly
       container.scrollTop = Math.max(0, container.scrollTop - 600);
       container.dispatchEvent(new Event('scroll', { bubbles: true }));
 
-      // Non-blocking 150ms delay keeps CPU < 10-15%
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // If the scroll position didn't change (or reached 0), increment no-new-content counter
+      if (container.scrollTop === lastScrollTop || container.scrollTop === 0) {
+        noNewContentCount++;
+      } else {
+        noNewContentCount = 0;
+      }
+
+      if (noNewContentCount >= 2) {
+        break; // Stop immediately when scroll boundary reached
+      }
+
+      // Non-blocking 100ms delay keeps CPU < 10-15% and completes fast
+      await new Promise(resolve => setTimeout(resolve, 100));
       scrollAttempts++;
     }
 
@@ -852,9 +855,18 @@
     loadFolders();
 
     // Events
-    overlay.querySelector('#ci-modal-close').onclick = removeModal;
-    overlay.querySelector('#ci-modal-cancel').onclick = removeModal;
-    overlay.addEventListener('click', e => { if (e.target === overlay) removeModal(); });
+    overlay.querySelector('#ci-modal-close').onclick = (e) => { e.stopPropagation(); removeModal(); };
+    overlay.querySelector('#ci-modal-cancel').onclick = (e) => { e.stopPropagation(); removeModal(); };
+    
+    // Prevent any modal mouse/keyboard event from bubbling or capturing to the host page
+    overlay.addEventListener('click', e => {
+      e.stopPropagation();
+      if (e.target === overlay) removeModal();
+    }, true);
+    overlay.addEventListener('mousedown', e => e.stopPropagation(), true);
+    overlay.addEventListener('mouseup', e => e.stopPropagation(), true);
+    overlay.addEventListener('keydown', e => e.stopPropagation(), true);
+    overlay.addEventListener('keyup', e => e.stopPropagation(), true);
 
     // Tags
     const tags = [];
