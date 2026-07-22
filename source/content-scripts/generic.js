@@ -456,37 +456,211 @@
     }
   }
 
-  /**
-   * Task 1: API / In-Memory Interceptor Extraction (Zero-DOM Dependency)
-   */
-  async function tryApiInterception() {
-    if (PLATFORM === 'chatgpt') {
-      const match = location.pathname.match(/\/c\/([a-f0-9-]+)/);
-      if (match && match[1]) {
-        try {
-          const resp = await fetch(`https://chatgpt.com/backend-api/conversation/${match[1]}`, { credentials: 'include' });
-          if (resp.ok) {
-            const data = await resp.json();
-            if (data && data.mapping) {
-              const msgs = [];
-              Object.values(data.mapping).forEach(node => {
-                const msg = node.message;
-                if (msg && msg.content && msg.content.parts) {
-                  const role = msg.author?.role || 'user';
-                  const text = msg.content.parts.filter(p => typeof p === 'string').join('\n').trim();
-                  if (text && role !== 'system') {
-                    msgs.push({ role, content: text });
-                  }
+  // ============================================================
+  // HYBRID EXTRACTION ENGINE (v2.1)
+  // ============================================================
+
+  // Platform API Parsers
+  const ChatGPTAdapter = {
+    parse(data) {
+      if (!data || !data.mapping) return null;
+      const msgs = [];
+      Object.values(data.mapping).forEach(node => {
+        const msg = node.message;
+        if (msg && msg.content && msg.content.parts) {
+          const role = msg.author?.role || 'user';
+          const text = msg.content.parts.filter(p => typeof p === 'string').join('\n').trim();
+          if (text && role !== 'system') {
+            msgs.push({ role: role === 'assistant' ? 'assistant' : 'user', content: text });
+          }
+        }
+      });
+      return msgs;
+    }
+  };
+
+  const ClaudeAdapter = {
+    parse(data) {
+      const rawMsgs = data?.chat_messages || (Array.isArray(data) ? data : data?.messages);
+      if (!Array.isArray(rawMsgs)) return null;
+      const msgs = [];
+      rawMsgs.forEach(msg => {
+        const role = msg.sender === 'assistant' ? 'assistant' : 'user';
+        let text = '';
+        if (typeof msg.text === 'string') {
+          text = msg.text.trim();
+        } else if (Array.isArray(msg.content)) {
+          text = msg.content.map(c => c.text || '').join('\n').trim();
+        }
+        if (text) {
+          msgs.push({ role, content: text });
+        }
+      });
+      return msgs;
+    }
+  };
+
+  const GeminiAdapter = {
+    parse(rawText) {
+      if (!rawText || typeof rawText !== 'string') return null;
+      try {
+        const lines = rawText.split('\n');
+        const msgs = [];
+        for (const line of lines) {
+          if (line.includes('wrt.r')) {
+            const startIdx = line.indexOf('[');
+            if (startIdx !== -1) {
+              const parsed = JSON.parse(line.substring(startIdx));
+              const traverse = (obj) => {
+                if (Array.isArray(obj)) {
+                  obj.forEach(traverse);
+                } else if (typeof obj === 'string' && obj.startsWith('[[')) {
+                  try {
+                    const inner = JSON.parse(obj);
+                    inner.forEach(item => {
+                      if (Array.isArray(item)) {
+                        const userPrompt = item[2]?.[0]?.[0];
+                        const assistantText = item[1]?.[0]?.[0];
+                        if (userPrompt && typeof userPrompt === 'string') {
+                          msgs.push({ role: 'user', content: userPrompt });
+                        }
+                        if (assistantText && typeof assistantText === 'string') {
+                          msgs.push({ role: 'assistant', content: assistantText });
+                        }
+                      }
+                    });
+                  } catch (e) {}
                 }
-              });
-              if (msgs.length > 0) return msgs;
+              };
+              traverse(parsed);
             }
           }
-        } catch(e) {}
+        }
+        if (msgs.length > 0) return msgs;
+      } catch (e) {
+        console.warn('[GeminiAdapter] Failed to parse batch payload:', e);
       }
+      return null;
     }
-    return null;
-  }
+  };
+
+  // Keep in-memory cache of last intercepted conversation payload
+  let lastInterceptedMessages = null;
+
+  window.addEventListener('ci-network-payload', (event) => {
+    const { platform, data } = event.detail;
+    let msgs = null;
+    try {
+      if (platform === 'chatgpt') {
+        msgs = ChatGPTAdapter.parse(data);
+      } else if (platform === 'claude') {
+        msgs = ClaudeAdapter.parse(data);
+      } else if (platform === 'gemini') {
+        msgs = GeminiAdapter.parse(data);
+      }
+
+      if (msgs && msgs.length > 0) {
+        lastInterceptedMessages = msgs;
+        console.log(`[Capsule Extractor] Intercepted ${msgs.length} messages from network.`);
+      }
+    } catch (e) {
+      console.warn('[Capsule Extractor] Error processing intercepted payload:', e);
+    }
+  });
+
+  const ExtractionController = {
+    async tryNetworkExtraction() {
+      // 1. Check in-memory intercepted cache
+      if (lastInterceptedMessages && lastInterceptedMessages.length > 0) {
+        return lastInterceptedMessages;
+      }
+
+      // 2. Fallback to active API fetch (like ChatGPT endpoints)
+      if (PLATFORM === 'chatgpt') {
+        const match = location.pathname.match(/\/c\/([a-f0-9-]+)/);
+        if (match && match[1]) {
+          try {
+            const resp = await fetch(`https://chatgpt.com/backend-api/conversation/${match[1]}`, { credentials: 'include' });
+            if (resp.ok) {
+              const data = await resp.json();
+              const msgs = ChatGPTAdapter.parse(data);
+              if (msgs && msgs.length > 0) return msgs;
+            }
+          } catch (e) {}
+        }
+      }
+      return null;
+    },
+
+    async fallbackDOMAccumulation(container) {
+      if (typeof DOMAccumulator === 'undefined') {
+        console.warn('[Capsule Extractor] DOMAccumulator script not loaded, using legacy walker.');
+        return this.legacyWalker(container);
+      }
+      
+      const getMessageKey = (msg) => {
+        if (!msg || !msg.content) return null;
+        return `${msg.role}_${msg.content.substring(0, 100)}`;
+      };
+
+      return await DOMAccumulator.accumulate(
+        container, 
+        extractCurrentVisibleMessages, 
+        getMessageKey
+      );
+    },
+
+    async legacyWalker(container) {
+      let accumulatedMessages = [];
+      let scrollAttempts = 0;
+      const maxAttempts = 30;
+      let noNewContentCount = 0;
+      const originalScrollTop = container.scrollTop;
+
+      while (scrollAttempts < maxAttempts) {
+        const currentMessages = extractCurrentVisibleMessages();
+        accumulatedMessages = mergeMessages(currentMessages, accumulatedMessages);
+        const lastScrollTop = container.scrollTop;
+        container.scrollTop = Math.max(0, container.scrollTop - 600);
+        container.dispatchEvent(new Event('scroll', { bubbles: true }));
+
+        if (container.scrollTop === lastScrollTop || container.scrollTop === 0) {
+          noNewContentCount++;
+        } else {
+          noNewContentCount = 0;
+        }
+        if (noNewContentCount >= 2) break;
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+        scrollAttempts++;
+      }
+      container.scrollTop = originalScrollTop;
+      return accumulatedMessages;
+    },
+
+    async extract() {
+      try {
+        const apiMessages = await this.tryNetworkExtraction();
+        if (apiMessages && apiMessages.length > 0) {
+          console.log('[Capsule Extractor] Using Primary Route (Network Interception).');
+          return apiMessages;
+        }
+      } catch (err) {
+        console.warn('[Capsule Extractor] Primary route fetch failed:', err);
+      }
+
+      console.log('[Capsule Extractor] Falling back to DOM Accumulator.');
+      const container = findScrollContainer();
+      if (!container) {
+        return extractCurrentVisibleMessages();
+      }
+      return await this.fallbackDOMAccumulation(container);
+    }
+  };
+
+  async function fetchFullChatHistory() {
+    return await ExtractionController.extract();
+  };
 
   function extractCurrentVisibleMessages() {
     const messages = [];
@@ -613,61 +787,6 @@
       }
     }
     return document.querySelector('main') || document.documentElement || document.body;
-  }
-
-  /**
-   * Task 2: Controlled Virtualized DOM Walker (Fallback Strategy)
-   * Asynchronous, non-blocking scrolling with setTimeout (150ms) to keep CPU < 10-15%
-   */
-  async function fetchFullChatHistory() {
-    // Attempt Task 1 API Interception first
-    const apiMessages = await tryApiInterception();
-    if (apiMessages && apiMessages.length > 0) {
-      return apiMessages;
-    }
-
-    const container = findScrollContainer();
-    if (!container) {
-      return extractCurrentVisibleMessages();
-    }
-
-    let accumulatedMessages = [];
-    let scrollAttempts = 0;
-    const maxAttempts = 30; // Safety ceiling
-    let noNewContentCount = 0;
-
-    const originalScrollTop = container.scrollTop;
-
-    while (scrollAttempts < maxAttempts) {
-      const currentMessages = extractCurrentVisibleMessages();
-      const previousLength = accumulatedMessages.length;
-      accumulatedMessages = mergeMessages(currentMessages, accumulatedMessages);
-
-      const lastScrollTop = container.scrollTop;
-
-      // Step scrollTop upwards smoothly
-      container.scrollTop = Math.max(0, container.scrollTop - 600);
-      container.dispatchEvent(new Event('scroll', { bubbles: true }));
-
-      // If the scroll position didn't change (or reached 0), increment no-new-content counter
-      if (container.scrollTop === lastScrollTop || container.scrollTop === 0) {
-        noNewContentCount++;
-      } else {
-        noNewContentCount = 0;
-      }
-
-      if (noNewContentCount >= 2) {
-        break; // Stop immediately when scroll boundary reached
-      }
-
-      // Non-blocking 100ms delay keeps CPU < 10-15% and completes fast
-      await new Promise(resolve => setTimeout(resolve, 100));
-      scrollAttempts++;
-    }
-
-    container.scrollTop = originalScrollTop;
-
-    return accumulatedMessages;
   }
 
   async function extractConversationAsync() {
