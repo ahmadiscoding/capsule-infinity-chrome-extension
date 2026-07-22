@@ -171,7 +171,9 @@ const CapsuleCompressor = {
       'javascript', 'css', 'html', 'git', 'revert', 'commit', 'push', 'json',
       'error', 'bug', 'fail', 'fix', 'solve', 'resolved', 'implement', 'decide',
       'must', 'constraint', 'limit', 'require', 'todo', 'pending', 'blocker',
-      'function', 'class', 'import', 'export', 'node', 'npm', 'react', 'next'
+      'function', 'class', 'import', 'export', 'node', 'npm', 'react', 'next',
+      'architecture', 'tradeoff', 'should', 'prefer', 'workflow', 'design', 'strategy',
+      'choice', 'approach', 'compare', 'difference', 'pros', 'cons'
     ];
     
     const containsTech = techIndicators.some(tech => lower.includes(tech));
@@ -455,9 +457,20 @@ const ContextComposer = {
       if (text.endsWith('.')) text = text.slice(0, -1);
       return text;
     });
-    if (cleaned.length === 1) return cleaned[0] + '.';
-    if (cleaned.length === 2) return `${cleaned[0]} and ${cleaned[1]}.`;
-    return `${cleaned.slice(0, -1).join(', ')}, and ${cleaned[cleaned.length - 1]}.`;
+
+    const chunks = [];
+    const chunkSize = 3;
+    for (let i = 0; i < cleaned.length; i += chunkSize) {
+      chunks.push(cleaned.slice(i, i + chunkSize));
+    }
+
+    const chunkStrings = chunks.map(chunk => {
+      if (chunk.length === 1) return chunk[0] + '.';
+      if (chunk.length === 2) return `${chunk[0]} and ${chunk[1]}.`;
+      return `${chunk.slice(0, -1).join(', ')}, and ${chunk[chunk.length - 1]}.`;
+    });
+
+    return chunkStrings.join(' ');
   },
 
   compose(entities, options = {}) {
