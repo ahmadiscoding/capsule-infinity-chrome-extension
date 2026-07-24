@@ -101,6 +101,13 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 3. Click the **Load unpacked** button in the top-left corner.
 4. Select the **`source`** folder inside your project directory.
 
+### Step 3: Setup Google Sign-In (Optional)
+To enable multi-device cloud synchronization via Google:
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project.
+2. Navigate to **APIs & Services > Credentials** and create an **OAuth client ID** of type **Chrome App/Extension**.
+3. Input your extension ID (found in `chrome://extensions/` after loading) into the configuration.
+4. Open the extension's [manifest.json](file:///e:/Capsule%20Extension/capsule-infinity-chrome-extension/source/manifest.json) file and replace the `oauth2.client_id` value placeholder (`"YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"`) with your client ID.
+
 🎉 **You're Done!** Just pin the Capsule Infinity icon to your toolbar for quick access.
 
 ## 📂 Project Architecture
@@ -122,9 +129,10 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 
 * **Milestone 1: Core Performance (Completed)**: Scraper engine, chunked save queue, timeout guards.
 * **Milestone 2: Cloud Sync (Completed)**: Supabase sync integration, Google Account PKCE auth, local cache fallback.
-* **Milestone 3: Workspace Collaboration (Planned / Upcoming)**: Multi-user organization team workspaces list, automated Supabase team schema migrations, and secure OTP/Invite key credentials exchange framework for cross-organization synchronization.
-* **Milestone 4: Mobile Expansion (Planned / Future)**: Dedicated iOS and Android mobile apps alongside mobile browser extensions support to seamlessly carry capsules and prompt context across desktop and mobile devices.
-* **Milestone 5: LLM Ecosystem & Chatbot Expansion**: Native support for the "Big 4" generative AI interfaces (ChatGPT, Claude, Gemini, and DeepSeek) with plans to expand scraper inject engines to additional enterprise chatbot platforms and open-source model interfaces (e.g., Hugging Face, OpenWebUI, LibreChat).
+* **Milestone 3: Stage 2 LLM Integration (Planned / Upcoming)**: Direct backend LLM model integration. Transition from rule-based compression to strict JSON schemas, handle markdown fences safely via backend parsers, and execute empty field pruning.
+* **Milestone 4: Workspace Collaboration (Planned / Upcoming)**: Multi-user organization team workspaces list, automated Supabase team schema migrations, and secure OTP/Invite key credentials exchange framework for cross-organization synchronization.
+* **Milestone 5: Mobile Expansion (Planned / Future)**: Dedicated iOS and Android mobile apps alongside mobile browser extensions support to seamlessly carry capsules and prompt context across desktop and mobile devices.
+* **Milestone 6: LLM Ecosystem & Chatbot Expansion**: Native support for the "Big 4" generative AI interfaces (ChatGPT, Claude, Gemini, and DeepSeek) with plans to expand scraper inject engines to additional enterprise chatbot platforms and open-source model interfaces (e.g., Hugging Face, OpenWebUI, LibreChat).
 
 ---
 

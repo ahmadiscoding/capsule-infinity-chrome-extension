@@ -11,6 +11,13 @@ CREATE TABLE IF NOT EXISTS public.capsules (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Note: Row Level Security is disabled so all users (including fallback local profile accounts) can synchronize.
--- Data security is handled via application-level query filtering.
-ALTER TABLE public.capsules DISABLE ROW LEVEL SECURITY;
+-- Enable Postgres Row Level Security (RLS)
+ALTER TABLE public.capsules ENABLE ROW LEVEL SECURITY;
+
+-- Allow authenticated users to perform all actions on their own capsules
+CREATE POLICY "Users can manage their own capsules" 
+ON public.capsules 
+FOR ALL 
+TO authenticated 
+USING (auth.uid()::text = user_id) 
+WITH CHECK (auth.uid()::text = user_id);

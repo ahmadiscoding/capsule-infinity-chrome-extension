@@ -964,9 +964,13 @@
       title = `${CapsuleUtils.getPlatformInfo(PLATFORM).name} Chat`;
     }
 
-    let compressedObj = { compressedContent: rawFormatted, savingsPercent: 0, rawTokens: 0, compressedTokens: 0 };
+    let compressedObj = { compressedContent: rawFormatted, savingsPercent: 0, rawTokens: 0, compressedTokens: 0, json: [] };
     if (typeof CapsuleCompressor !== 'undefined') {
-      compressedObj = CapsuleCompressor.compress(messagesOrText, { title: title });
+      const existingEntities = currentCapture?.json || [];
+      compressedObj = CapsuleCompressor.compress(messagesOrText, { 
+        title: title,
+        existingEntities: existingEntities
+      });
     }
 
     return {
@@ -978,7 +982,8 @@
       rawTokens: compressedObj.rawTokens,
       compressedTokens: compressedObj.compressedTokens,
       messageCount: messageCount,
-      platform: PLATFORM
+      platform: PLATFORM,
+      json: compressedObj.json || []
     };
   }
 
@@ -1248,19 +1253,29 @@
         folderId: overlay.querySelector('#ci-cap-folder').value || null,
         tags,
         messageCount: currentCapture.messageCount,
+        savingsPercent: currentCapture.savingsPercent || 0,
+        rawTokens: currentCapture.rawTokens || 0,
+        compressedTokens: currentCapture.compressedTokens || 0,
         captureMethod: 'floating-button'
       };
 
       let savedCapsule = null;
+      let cloudSaved = true;
       try {
         savedCapsule = await saveCapsuleViaBackground(capsuleData);
       } catch (err) {
         console.warn('[Capture Modal] Background chunked save failed, falling back to direct save:', err);
+        cloudSaved = false;
         try {
           savedCapsule = await CapsuleStorage.saveCapsule(capsuleData);
         } catch (localErr) {
           console.error('[Capture Modal] Direct save also failed:', localErr);
+          throw new Error('All storage layers failed: ' + localErr.message);
         }
+      }
+
+      if (savedCapsule && !cloudSaved) {
+        showToast('Cloud sync unreachable. Saved locally instead.', 'warning');
       }
 
       return savedCapsule || capsuleData;

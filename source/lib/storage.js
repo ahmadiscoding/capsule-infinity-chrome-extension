@@ -115,6 +115,9 @@ const CapsuleStorage = {
                 folderId: parsed.folderId || 'default',
                 tags: parsed.tags || [],
                 messageCount: parsed.messageCount || 1,
+                savingsPercent: parsed.savingsPercent || 0,
+                rawTokens: parsed.rawTokens || 0,
+                compressedTokens: parsed.compressedTokens || 0,
                 createdAt: new Date(row.created_at).getTime(),
                 updatedAt: parsed.updatedAt || new Date(row.created_at).getTime(),
                 metadata: {
@@ -159,6 +162,9 @@ const CapsuleStorage = {
             folderId: parsed.folderId || 'default',
             tags: parsed.tags || [],
             messageCount: parsed.messageCount || 1,
+            savingsPercent: parsed.savingsPercent || 0,
+            rawTokens: parsed.rawTokens || 0,
+            compressedTokens: parsed.compressedTokens || 0,
             createdAt: new Date(row.created_at).getTime(),
             updatedAt: parsed.updatedAt || new Date(row.created_at).getTime(),
             metadata: {
@@ -227,6 +233,9 @@ const CapsuleStorage = {
             folderId: capsule.folderId || 'default',
             tags: capsule.tags || [],
             messageCount: capsule.messageCount || 1,
+            savingsPercent: capsule.savingsPercent || 0,
+            rawTokens: capsule.rawTokens || 0,
+            compressedTokens: capsule.compressedTokens || 0,
             updatedAt: capsule.metadata.updatedAt,
             version: capsule.metadata.version,
             versionHistory: capsule.metadata.versionHistory || []

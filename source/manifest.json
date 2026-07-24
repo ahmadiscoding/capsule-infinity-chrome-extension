@@ -19,7 +19,6 @@
     "https://claude.ai/*",
     "https://gemini.google.com/*",
     "https://chat.deepseek.com/*",
-    "https://mail.google.com/*",
     "https://kvdb.io/*",
     "https://*.openai.com/*",
     "https://anthropic.com/*",
@@ -83,12 +82,7 @@
       "css": ["shared/inject.css"],
       "run_at": "document_start"
     },
-    {
-      "matches": ["https://mail.google.com/*"],
-      "js": ["lib/storage.js", "lib/utils.js", "lib/api.js", "lib/compressor.js", "content-scripts/accumulator.js", "lib/animation.js", "content-scripts/generic.js", "content-scripts/gmail.js"],
-      "css": ["shared/inject.css"],
-      "run_at": "document_start"
-    },
+
     {
       "matches": [
         "https://copilot.microsoft.com/*",

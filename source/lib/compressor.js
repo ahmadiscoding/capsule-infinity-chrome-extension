@@ -71,16 +71,16 @@ const CapsuleCompressor = {
       return signatures.slice(0, 10).join('\n');
     });
 
-    // 4. Strip boilerplate meta-prompts
+    // 4. Strip boilerplate meta-prompts (ensure thank you/thanks matches sentence boundaries only)
     const boilerplate = [
-      /Copy this prompt/gi,
-      /Here is the revised code:/gi,
-      /As an AI language model/gi,
-      /Does this make sense/gi,
-      /Hope this helps/gi,
-      /feel free to ask/gi,
-      /thank you/gi,
-      /thanks/gi
+      /\bcopy this prompt\b/gi,
+      /\bhere is the revised code:\b/gi,
+      /\bas an ai language model\b/gi,
+      /\bdoes this make sense\b/gi,
+      /\bhope this helps\b/gi,
+      /\bfeel free to ask\b/gi,
+      /(?:^|[\.\?\!\n])\s*thank\s+you\b[^.!?\n]*(?:[\.\?\!\n]|$)/gi,
+      /(?:^|[\.\?\!\n])\s*thanks\b[^.!?\n]*(?:[\.\?\!\n]|$)/gi
     ];
     for (const pattern of boilerplate) {
       cleaned = cleaned.replace(pattern, '');
@@ -217,7 +217,7 @@ const CapsuleCompressor = {
     ];
     
     const containsTech = techIndicators.some(tech => lower.includes(tech));
-    const containsFile = lower.includes('.') || lower.includes('/') || lower.includes('\\');
+    const containsFile = /\b[\w-]+\.(?:js|css|json|html|md|py|go|ts|sh|yml|yaml|txt)\b/i.test(lower) || /[\w-]+\/[\w.-]+/i.test(lower) || /[\w-]+\\[\w.-]+/i.test(lower);
     
     return containsTech || containsFile;
   },
@@ -306,27 +306,76 @@ const CapsuleCompressor = {
         return;
       }
 
-      let type = null;
-      let attrKey = '';
-      
-      if (lower.includes('todo') || lower.includes('pending') || lower.includes('next step') || lower.includes('task') || lower.includes('need to')) {
-        type = 'todo';
-        attrKey = 'task';
-      } else if (lower.includes('bug') || lower.includes('error') || lower.includes('fail') || lower.includes('issue') || lower.includes('blocker')) {
-        type = 'bug';
-        attrKey = 'blocker';
-      } else if (lower.includes('decide') || lower.includes('choose') || lower.includes('chose') || lower.includes('implement') || lower.includes('prefer') || lower.includes('switch') || lower.includes('adopt') || lower.includes('select')) {
-        type = 'decision';
-        attrKey = 'decision';
-      } else if (lower.includes('recommend') || lower.includes('suggest') || lower.includes('option') || lower.includes('advisory') || lower.includes('advise')) {
-        type = 'recommendation';
-        attrKey = 'recommendation';
-      } else if (lower.includes('must') || lower.includes('restrict') || lower.includes('limit') || lower.includes('constraint') || lower.includes('rule') || lower.includes('require')) {
-        type = 'constraint';
-        attrKey = 'constraint';
-      } else {
-        type = 'preference';
-        attrKey = 'detail';
+      const categories = [
+        { type: 'todo', attrKey: 'task', keywords: [
+          { word: 'todo', weight: 3 },
+          { word: 'pending', weight: 2 },
+          { word: 'next step', weight: 2 },
+          { word: 'task', weight: 1 },
+          { word: 'need to', weight: 2 }
+        ]},
+        { type: 'bug', attrKey: 'blocker', keywords: [
+          { word: 'bug', weight: 3 },
+          { word: 'error', weight: 2 },
+          { word: 'fail', weight: 2 },
+          { word: 'issue', weight: 1 },
+          { word: 'blocker', weight: 3 }
+        ]},
+        { type: 'decision', attrKey: 'decision', keywords: [
+          { word: 'decide', weight: 3 },
+          { word: 'decision', weight: 3 },
+          { word: 'choose', weight: 2 },
+          { word: 'chose', weight: 2 },
+          { word: 'implement', weight: 2 },
+          { word: 'prefer', weight: 2 },
+          { word: 'switch', weight: 2 },
+          { word: 'adopt', weight: 2 },
+          { word: 'select', weight: 2 }
+        ]},
+        { type: 'recommendation', attrKey: 'recommendation', keywords: [
+          { word: 'recommend', weight: 3 },
+          { word: 'suggest', weight: 3 },
+          { word: 'option', weight: 2 },
+          { word: 'advisory', weight: 3 },
+          { word: 'advise', weight: 3 }
+        ]},
+        { type: 'constraint', attrKey: 'constraint', keywords: [
+          { word: 'must', weight: 2 },
+          { word: 'restrict', weight: 2 },
+          { word: 'limit', weight: 2 },
+          { word: 'constraint', weight: 3 },
+          { word: 'rule', weight: 2 },
+          { word: 'require', weight: 2 }
+        ]}
+      ];
+
+      let bestCategory = null;
+      let maxScore = 0;
+
+      categories.forEach(cat => {
+        let score = 0;
+        cat.keywords.forEach(kwObj => {
+          const kw = kwObj.word;
+          const regexStr = `\\b${kw.replace(' ', '\\s+')}\\w*\\b`;
+          const regex = new RegExp(regexStr, 'gi');
+          const matches = lower.match(regex) || [];
+          score += matches.length * kwObj.weight;
+
+          if (lower.trim().startsWith(kw)) {
+            score += kwObj.weight * 2;
+          }
+        });
+        if (score > maxScore) {
+          maxScore = score;
+          bestCategory = cat;
+        }
+      });
+
+      let type = 'preference';
+      let attrKey = 'detail';
+      if (bestCategory && maxScore > 0) {
+        type = bestCategory.type;
+        attrKey = bestCategory.attrKey;
       }
 
       if (type && !addedSentences.has(lower)) {
@@ -566,31 +615,58 @@ const ContextComposer = {
   clusterEntities(entities) {
     const topics = {};
     const stopwords = new Set(['about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren\'t', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 'can\'t', 'cannot', 'could', 'couldn\'t', 'did', 'didn\'t', 'do', 'does', 'doesn\'t', 'doing', 'don\'t', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', 'hadn\'t', 'has', 'hasn\'t', 'have', 'haven\'t', 'having', 'he', 'he\'d', 'he\'ll', 'he\'s', 'her', 'here', 'here\'s', 'hers', 'herself', 'him', 'himself', 'his', 'how', 'how\'s', 'i', 'i\'d', 'i\'ll', 'i\'m', 'i\'ve', 'if', 'in', 'into', 'is', 'isn\'t', 'it', 'it\'s', 'its', 'itself', 'let\'s', 'me', 'more', 'most', 'mustn\'t', 'my', 'myself', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'ought', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'shan\'t', 'she', 'she\'d', 'she\'ll', 'she\'s', 'should', 'shouldn\'t', 'so', 'some', 'such', 'than', 'that', 'that\'s', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'there\'s', 'these', 'they', 'they\'d', 'they\'ll', 'they\'re', 'they\'ve', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', 'wasn\'t', 'we', 'we\'d', 'we\'ll', 'we\'re', 'we\'ve', 'were', 'weren\'t', 'what', 'what\'s', 'when', 'when\'s', 'where', 'where\'s', 'which', 'while', 'who', 'who\'s', 'whom', 'why', 'why\'s', 'with', 'won\'t', 'would', 'wouldn\'t', 'you', 'you\'d', 'you\'ll', 'you\'re', 'you\'ve', 'your', 'yours', 'yourself', 'yourselves']);
+    const classificationStopwords = new Set(['todo', 'task', 'decide', 'decision', 'choose', 'chose', 'implement', 'preference', 'constraint', 'bug', 'issue', 'problem', 'blocker', 'recommendation', 'recommend', 'suggest', 'suggestion', 'option', 'advisory', 'advise', 'must', 'require', 'need', 'pending', 'next', 'step', 'work', 'code', 'file', 'project', 'line', 'user', 'assistant', 'system', 'chat', 'conversation', 'capsule', 'source', 'folder', 'tag', 'save', 'detail', 'should', 'would', 'could', 'want', 'make', 'find', 'take', 'give', 'know', 'look', 'think', 'come', 'show', 'tell']);
 
+    // Extract bigrams and clean unigrams
     entities.forEach(e => {
       const val = Object.values(e.attributes || {})[0] || '';
       if (!val) return;
-      const words = val.toLowerCase().match(/\b[a-z]{4,}\b/g) || [];
-      e._keywords = words.filter(w => !stopwords.has(w));
+      
+      const words = val.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+      const cleanWords = words.filter(w => !stopwords.has(w) && !classificationStopwords.has(w));
+      
+      e._keywords = cleanWords;
+      
+      const bigrams = [];
+      for (let i = 0; i < words.length - 1; i++) {
+        const w1 = words[i];
+        const w2 = words[i+1];
+        if (!stopwords.has(w1) && !stopwords.has(w2) && !classificationStopwords.has(w1) && !classificationStopwords.has(w2)) {
+          bigrams.push(`${w1} ${w2}`);
+        }
+      }
+      e._bigrams = bigrams;
     });
 
-    const wordFreq = {};
+    const bigramFreq = {};
+    const unigramFreq = {};
+    
     entities.forEach(e => {
-      (e._keywords || []).forEach(w => {
-        wordFreq[w] = (wordFreq[w] || 0) + 1;
+      (e._bigrams || []).forEach(b => {
+        bigramFreq[b] = (bigramFreq[b] || 0) + 1;
+      });
+      (e._keywords || []).forEach(u => {
+        unigramFreq[u] = (unigramFreq[u] || 0) + 1;
       });
     });
 
-    const sortedKeywords = Object.keys(wordFreq)
-      .filter(w => wordFreq[w] >= 2)
-      .sort((a, b) => wordFreq[b] - wordFreq[a]);
+    // Keep bigrams and unigrams that appear at least 2 times
+    const sortedBigrams = Object.keys(bigramFreq)
+      .filter(b => bigramFreq[b] >= 2)
+      .sort((a, b) => bigramFreq[b] - bigramFreq[a]);
+      
+    const sortedUnigrams = Object.keys(unigramFreq)
+      .filter(u => unigramFreq[u] >= 2)
+      .sort((a, b) => unigramFreq[b] - unigramFreq[a]);
 
     const assigned = new Set();
-    
-    sortedKeywords.forEach(keyword => {
-      const topicName = keyword.charAt(0).toUpperCase() + keyword.slice(1);
+    const capitalizeTopic = (name) => name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+    // First try clustering by multi-word bigrams
+    sortedBigrams.forEach(bigram => {
+      const topicName = capitalizeTopic(bigram);
       entities.forEach(e => {
-        if (!assigned.has(e.id) && (e._keywords || []).includes(keyword)) {
+        if (!assigned.has(e.id) && (e._bigrams || []).includes(bigram)) {
           if (!topics[topicName]) topics[topicName] = [];
           topics[topicName].push(e);
           assigned.add(e.id);
@@ -598,6 +674,19 @@ const ContextComposer = {
       });
     });
 
+    // Fallback to unigrams
+    sortedUnigrams.forEach(unigram => {
+      const topicName = capitalizeTopic(unigram);
+      entities.forEach(e => {
+        if (!assigned.has(e.id) && (e._keywords || []).includes(unigram)) {
+          if (!topics[topicName]) topics[topicName] = [];
+          topics[topicName].push(e);
+          assigned.add(e.id);
+        }
+      });
+    });
+
+    // Default catch-all buckets
     entities.forEach(e => {
       if (!assigned.has(e.id)) {
         let bucket = 'General Specifications';

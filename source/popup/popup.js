@@ -188,14 +188,16 @@ console.warn = function(...args) {
       const time = Utils?.timeAgo ? Utils.timeAgo(c.updatedAt || c.createdAt || Date.now()) : '';
       const words = Utils?.wordCount ? Utils.wordCount(c.content || '') : 0;
       const truncatedTitle = Utils?.truncate ? Utils.truncate(title, 38) : (title.length > 38 ? title.slice(0, 38) + '…' : title);
+      const savingsBadge = c.savingsPercent > 0 ? `<span style="font-size:9px;font-weight:600;color:#10b981;background:rgba(16,185,129,0.12);padding:1px 6px;border-radius:8px;margin-left:4px;">⚡ ${c.savingsPercent}%</span>` : '';
 
       return `
         <div class="capsule-item" data-id="${c.id}">
           <div class="capsule-platform-dot" style="background:${color}"></div>
           <div class="capsule-info">
-            <div class="capsule-title" title="${title}">${truncatedTitle}</div>
+            <div class="capsule-title" title="${escHtml(title)}">${escHtml(truncatedTitle)}</div>
             <div class="capsule-meta">
               <span class="capsule-platform-tag">${platform}</span>
+              ${savingsBadge}
               <span>${words}w</span>
               <span>${time}</span>
             </div>

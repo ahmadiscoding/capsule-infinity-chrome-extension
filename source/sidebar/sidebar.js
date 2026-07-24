@@ -646,6 +646,7 @@ console.warn = function(...args) {
       const time = Utils?.timeAgo ? Utils.timeAgo(c.updatedAt || c.createdAt || Date.now()) : '';
       const words = Utils?.wordCount ? Utils.wordCount(c.content || '') : 0;
       const folder = c.folderId ? state.folders.find(f => f.id === c.folderId) : null;
+      const savingsBadge = c.savingsPercent > 0 ? `<span style="font-size:9px;font-weight:600;color:#10b981;background:rgba(16,185,129,0.12);padding:1px 6px;border-radius:8px;margin-left:4px;">⚡ ${c.savingsPercent}%</span>` : '';
 
       return `
         <div class="capsule-item" draggable="true" data-id="${c.id}">
@@ -655,6 +656,7 @@ console.warn = function(...args) {
             <div class="capsule-title" title="${escAttr(title)}">${escHtml(displayTitle)}</div>
             <div class="capsule-meta">
               <span class="capsule-platform-tag">${platform}</span>
+              ${savingsBadge}
               ${folder ? `<span class="capsule-folder-tag"><span class="dot" style="background:${folder.color}"></span>${escHtml(folder.name)}</span>` : ''}
               <span>${words}w</span>
               <span>${time}</span>
@@ -1015,7 +1017,8 @@ console.warn = function(...args) {
     $('#detailTitle').textContent = title;
     $('#detailContent').textContent = content;
     $('#detailPlatform').textContent = platform.toUpperCase();
-    $('#detailWords').textContent = `${words} words`;
+    const savingsText = capsule.savingsPercent > 0 ? ` (⚡ ${capsule.savingsPercent}% tokens saved)` : '';
+    $('#detailWords').textContent = `${words} words${savingsText}`;
     $('#detailDate').textContent = date;
     $('#capsuleDetail').classList.add('open');
   }
