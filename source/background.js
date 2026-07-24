@@ -119,16 +119,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         const res = await chrome.storage.local.get(['capsules']);
         const sb = await SupabaseClient.ensureInitialized();
-        if (sb) {
+        const session = await SupabaseClient.getSession();
+        if (sb && session?.access_token) {
           try {
-            let userId = null;
-            try {
-              const user = await SupabaseClient.getUser();
-              if (user?.id) {
-                userId = user.id;
-              }
-            } catch (authErr) {
-              console.warn('[Background] Supabase getUser failed, trying fallback:', authErr);
+            let userId = session.user?.id;
+            if (!userId) {
+              try {
+                const user = await SupabaseClient.getUser();
+                if (user?.id) userId = user.id;
+              } catch {}
             }
 
             if (!userId) {

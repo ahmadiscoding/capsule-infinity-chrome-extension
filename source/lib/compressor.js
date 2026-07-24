@@ -31,6 +31,38 @@ const CapsuleCompressor = {
     return Math.ceil(text.length / 4);
   },
 
+  stripSpeakerPrefix(text) {
+    if (!text) return '';
+    let cleaned = text;
+    let prev = '';
+    while (cleaned !== prev) {
+      prev = cleaned;
+      cleaned = cleaned.replace(/\b(User|Assistant|System|Result:\s*User|Result:\s*Assistant):\s*/i, '').trim();
+      cleaned = cleaned.replace(/^(also|then|however|therefore|so|and)[\s,]+/i, '').trim();
+    }
+    return cleaned;
+  },
+
+  stripPleasantries(text) {
+    if (!text) return '';
+    return text.replace(/^(great choice|that makes complete sense|that makes sense|makes sense|i see|got it|sounds good|awesome|cool|perfect|to be honest|honestly|basically|actually|sure thing|no problem|ok|okay)[\s!.,]*/i, '').trim();
+  },
+
+  hasTechnicalOrDecisionKeywords(text) {
+    const lower = text.toLowerCase();
+    const technicalKeywords = [
+      'use', 'adopt', 'implement', 'deploy', 'configure', 'setup', 'run', 'integrate',
+      'build', 'write', 'replace', 'refactor', 'migrate', 'host', 'store', 'enable',
+      'disable', 'allow', 'restrict', 'bind', 'call', 'fetch', 'query', 'save',
+      'persist', 'cache', 'decide', 'decision', 'choose', 'chose', 'select', 'prefer',
+      'switch', 'schema', 'table', 'database', 'rls', 'token', 'jwt', 'auth'
+    ];
+    return technicalKeywords.some(kw => {
+      const regex = new RegExp(`\\b${kw}\\w*\\b`, 'i');
+      return regex.test(lower);
+    });
+  },
+
   /**
    * Stage 1: Conversation Cleaner (Deterministic Preprocessing)
    */
@@ -180,17 +212,20 @@ const CapsuleCompressor = {
    */
   deduceIntent(firstMsg) {
     if (!firstMsg) return 'maintain conversation context';
-    const clean = firstMsg.trim().replace(/^[-*•\d.]+\s*/, '');
-    const lower = clean.toLowerCase();
+    const lines = firstMsg.split('\n').map(l => l.trim()).filter(Boolean);
     
-    let processed = clean;
-    if (lower.startsWith('salam') || lower.startsWith('hello') || lower.startsWith('hi') || lower.startsWith('hey')) {
-      const lines = clean.split('\n');
-      const nextLine = lines.find(l => l.trim().length > 5 && !/^(hi|hello|hey|salam)/i.test(l.trim()));
-      if (nextLine) processed = nextLine.trim();
+    const fluffRegex = /^(great choice|that makes complete sense|that makes sense|makes sense|i see|got it|sounds good|awesome|cool|perfect|to be honest|honestly|basically|actually|sure thing|no problem|ok|okay)[\s!.,]*/i;
+    const opinionFluff = /\b(is simpler|are simpler|simpler than|easier to|better option)\b/i;
+
+    for (const line of lines) {
+      let cleaned = this.stripSpeakerPrefix(line);
+      cleaned = this.stripPleasantries(cleaned);
+      if (cleaned && !fluffRegex.test(cleaned.toLowerCase()) && !opinionFluff.test(cleaned.toLowerCase())) {
+        return cleaned.substring(0, 100);
+      }
     }
     
-    return processed.split('\n')[0].trim().substring(0, 100);
+    return 'maintain conversation context';
   },
 
   /**
@@ -272,16 +307,32 @@ const CapsuleCompressor = {
     });
 
     lines.forEach(line => {
-      const lower = line.toLowerCase();
+      let cleanedLine = line.replace(/^[-*•\d.]+\s*/, '').trim();
+      cleanedLine = this.stripSpeakerPrefix(cleanedLine);
+      cleanedLine = this.stripPleasantries(cleanedLine);
+      cleanedLine = this.stripSpeakerPrefix(cleanedLine);
+      if (!cleanedLine) return;
+
+      const lower = cleanedLine.toLowerCase();
       
-      if (line.includes('function ') || line.includes('class ') || line.includes('const ') || line.includes('import ')) {
+      if (cleanedLine.includes('function ') || cleanedLine.includes('class ') || cleanedLine.includes('const ') || cleanedLine.includes('import ')) {
         return;
       }
 
-      const parts = line.split(':');
+      // Filter out conversational pleasantries, transitional commentary, and opinion fluff
+      const fluffRegex = /^(great choice|that makes complete sense|that makes sense|makes sense|i see|got it|sounds good|awesome|cool|perfect|to be honest|honestly|basically|actually|sure thing|no problem)/i;
+      if (fluffRegex.test(lower) && lower.length < 60) {
+        return;
+      }
+      if (lower.includes('is simpler') && lower.length < 40) {
+        return;
+      }
+
+      const parts = cleanedLine.split(':');
       if (parts.length >= 2 && ['decision', 'preference', 'constraint', 'todo', 'bug', 'problem', 'solution', 'recommendation', 'suggestion'].includes(parts[0].trim().toLowerCase())) {
         const key = parts[0].trim().toLowerCase();
-        const value = parts.slice(1).join(':').trim();
+        const value = this.stripSpeakerPrefix(parts.slice(1).join(':').trim());
+        if (!value) return;
         
         let type = 'preference';
         let action = 'UPSERT';
@@ -293,6 +344,11 @@ const CapsuleCompressor = {
         else if (key === 'solution') {
           type = 'bug';
           action = 'RESOLVE';
+        }
+
+        // Require decisions and facts (preference) to contain technical verbs/keywords
+        if ((type === 'decision' || type === 'preference') && !this.hasTechnicalOrDecisionKeywords(value)) {
+          return;
         }
         
         const id = `${type}.${value.substring(0, 30).toLowerCase().replace(/[^a-z0-9]/g, '.')}`;
@@ -378,9 +434,17 @@ const CapsuleCompressor = {
         attrKey = bestCategory.attrKey;
       }
 
-      if (type && !addedSentences.has(lower)) {
-        addedSentences.add(lower);
-        const cleanVal = line.replace(/^[-*•\d.]+\s*/, '').trim();
+      const cleanVal = this.stripSpeakerPrefix(cleanedLine.replace(/^[-*•\d.]+\s*/, '').trim());
+      if (!cleanVal) return;
+
+      // Require decisions and facts (preference) to contain technical verbs/keywords
+      if ((type === 'decision' || type === 'preference') && !this.hasTechnicalOrDecisionKeywords(cleanVal)) {
+        return;
+      }
+
+      const cleanLower = cleanVal.toLowerCase();
+      if (type && !addedSentences.has(cleanLower)) {
+        addedSentences.add(cleanLower);
         const id = `${type}.${cleanVal.substring(0, 30).toLowerCase().replace(/[^a-z0-9]/g, '.')}`;
         mutations.push({
           action: 'UPSERT',
@@ -615,7 +679,7 @@ const ContextComposer = {
   clusterEntities(entities) {
     const topics = {};
     const stopwords = new Set(['about', 'above', 'after', 'again', 'against', 'all', 'am', 'an', 'and', 'any', 'are', 'aren\'t', 'as', 'at', 'be', 'because', 'been', 'before', 'being', 'below', 'between', 'both', 'but', 'by', 'can\'t', 'cannot', 'could', 'couldn\'t', 'did', 'didn\'t', 'do', 'does', 'doesn\'t', 'doing', 'don\'t', 'down', 'during', 'each', 'few', 'for', 'from', 'further', 'had', 'hadn\'t', 'has', 'hasn\'t', 'have', 'haven\'t', 'having', 'he', 'he\'d', 'he\'ll', 'he\'s', 'her', 'here', 'here\'s', 'hers', 'herself', 'him', 'himself', 'his', 'how', 'how\'s', 'i', 'i\'d', 'i\'ll', 'i\'m', 'i\'ve', 'if', 'in', 'into', 'is', 'isn\'t', 'it', 'it\'s', 'its', 'itself', 'let\'s', 'me', 'more', 'most', 'mustn\'t', 'my', 'myself', 'no', 'nor', 'not', 'of', 'off', 'on', 'once', 'only', 'or', 'other', 'ought', 'our', 'ours', 'ourselves', 'out', 'over', 'own', 'same', 'shan\'t', 'she', 'she\'d', 'she\'ll', 'she\'s', 'should', 'shouldn\'t', 'so', 'some', 'such', 'than', 'that', 'that\'s', 'the', 'their', 'theirs', 'them', 'themselves', 'then', 'there', 'there\'s', 'these', 'they', 'they\'d', 'they\'ll', 'they\'re', 'they\'ve', 'this', 'those', 'through', 'to', 'too', 'under', 'until', 'up', 'very', 'was', 'wasn\'t', 'we', 'we\'d', 'we\'ll', 'we\'re', 'we\'ve', 'were', 'weren\'t', 'what', 'what\'s', 'when', 'when\'s', 'where', 'where\'s', 'which', 'while', 'who', 'who\'s', 'whom', 'why', 'why\'s', 'with', 'won\'t', 'would', 'wouldn\'t', 'you', 'you\'d', 'you\'ll', 'you\'re', 'you\'ve', 'your', 'yours', 'yourself', 'yourselves']);
-    const classificationStopwords = new Set(['todo', 'task', 'decide', 'decision', 'choose', 'chose', 'implement', 'preference', 'constraint', 'bug', 'issue', 'problem', 'blocker', 'recommendation', 'recommend', 'suggest', 'suggestion', 'option', 'advisory', 'advise', 'must', 'require', 'need', 'pending', 'next', 'step', 'work', 'code', 'file', 'project', 'line', 'user', 'assistant', 'system', 'chat', 'conversation', 'capsule', 'source', 'folder', 'tag', 'save', 'detail', 'should', 'would', 'could', 'want', 'make', 'find', 'take', 'give', 'know', 'look', 'think', 'come', 'show', 'tell']);
+    const classificationStopwords = new Set(['todo', 'task', 'decide', 'decision', 'choose', 'chose', 'implement', 'preference', 'constraint', 'bug', 'issue', 'problem', 'blocker', 'recommendation', 'recommend', 'suggest', 'suggestion', 'option', 'advisory', 'advise', 'must', 'require', 'need', 'pending', 'next', 'step', 'work', 'code', 'file', 'project', 'line', 'user', 'assistant', 'system', 'chat', 'conversation', 'capsule', 'source', 'folder', 'tag', 'save', 'detail', 'should', 'would', 'could', 'want', 'make', 'find', 'take', 'give', 'know', 'look', 'think', 'come', 'show', 'tell', 'use', 'using', 'add', 'adding', 'making', 'get', 'getting', 'set', 'setting', 'update', 'updating', 'fix', 'fixing']);
 
     // Extract bigrams and clean unigrams
     entities.forEach(e => {
@@ -739,8 +803,6 @@ const ContextComposer = {
         resultText = this.joinSentences(decisions);
       } else if (recommendations.length > 0) {
         resultText = this.joinSentences(recommendations);
-      } else {
-        resultText = 'Recommended implementation path presented to user and confirmed.';
       }
 
       // Facts
@@ -754,7 +816,9 @@ const ContextComposer = {
       markdown += `Type: ${typeText}\n`;
       markdown += `Goal: ${goalText}\n`;
       markdown += `Facts/Criteria: ${factsText}\n`;
-      markdown += `Result: ${resultText}\n`;
+      if (resultText) {
+        markdown += `Result: ${resultText}\n`;
+      }
       if (constraints.length > 0) {
         markdown += `Constraints: ${this.joinSentences(constraints)}\n`;
       }

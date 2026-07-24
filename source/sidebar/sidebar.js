@@ -93,15 +93,16 @@ console.warn = function(...args) {
   const KVDB_BUCKET = 'cap_inf_teams_db_938172';
 
   async function kvdbGet(key) {
-    const settings = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey']);
-    if (settings.supabaseUrl && settings.supabaseKey) {
+    const settings = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
+    const token = settings.supabaseSession?.access_token;
+    if (settings.supabaseUrl && settings.supabaseKey && token) {
       try {
         if (key.startsWith('team_')) {
           const teamId = key.replace('team_', '');
           const response = await fetch(`${settings.supabaseUrl}/rest/v1/teams?team_id=eq.${encodeURIComponent(teamId)}`, {
             headers: {
               'apikey': settings.supabaseKey,
-              'Authorization': `Bearer ${settings.supabaseKey}`
+              'Authorization': `Bearer ${token}`
             }
           });
           if (response.ok) {
@@ -124,7 +125,7 @@ console.warn = function(...args) {
           const response = await fetch(`${settings.supabaseUrl}/rest/v1/teams?invite_code=eq.${encodeURIComponent(inviteCode)}`, {
             headers: {
               'apikey': settings.supabaseKey,
-              'Authorization': `Bearer ${settings.supabaseKey}`
+              'Authorization': `Bearer ${token}`
             }
           });
           if (response.ok) {
@@ -163,8 +164,9 @@ console.warn = function(...args) {
   }
 
   async function kvdbSet(key, value) {
-    const settings = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey']);
-    if (settings.supabaseUrl && settings.supabaseKey) {
+    const settings = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
+    const token = settings.supabaseSession?.access_token;
+    if (settings.supabaseUrl && settings.supabaseKey && token) {
       try {
         if (key.startsWith('team_') || key.startsWith('invite_')) {
           const team = value;
@@ -182,7 +184,7 @@ console.warn = function(...args) {
 
           const headers = {
             'apikey': settings.supabaseKey,
-            'Authorization': `Bearer ${settings.supabaseKey}`,
+            'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json',
             'Prefer': 'resolution=merge-duplicates'
           };

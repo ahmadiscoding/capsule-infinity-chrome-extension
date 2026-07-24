@@ -20,7 +20,7 @@ const CapsuleStorage = {
 
   // Helper for Supabase REST API calls (legacy fallback)
   async supabaseFetch(method, path, body = null, preferHeader = null) {
-    const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey']);
+    const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
     const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
     const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
     
@@ -28,9 +28,11 @@ const CapsuleStorage = {
     const key = res.supabaseKey || defaultKey;
     if (!url || !key) return null;
 
+    const token = res.supabaseSession?.access_token || key;
+
     const headers = {
       'apikey': key,
-      'Authorization': `Bearer ${key}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     };
     if (preferHeader) {
@@ -76,14 +78,12 @@ const CapsuleStorage = {
 
   async getAllCapsules() {
     const sb = await this.initSupabase();
-    if (sb) {
-      try {
-        let userId = null;
-        try {
-          const { data: { session } } = await sb.auth.getSession();
-          if (session?.user?.id) userId = session.user.id;
-        } catch {}
+    const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
+    const session = client ? await client.getSession() : null;
 
+    if (sb && session?.access_token) {
+      try {
+        let userId = session.user?.id;
         if (!userId) {
           const localUser = await chrome.storage.local.get(['user']);
           userId = localUser?.user?.id;
@@ -141,7 +141,10 @@ const CapsuleStorage = {
 
   async getCapsule(id) {
     const sb = await this.initSupabase();
-    if (sb) {
+    const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
+    const session = client ? await client.getSession() : null;
+
+    if (sb && session?.access_token) {
       try {
         const { data, error } = await sb.from('capsules').select('*').eq('id', id);
         if (error) throw error;
@@ -199,18 +202,18 @@ const CapsuleStorage = {
     capsule.metadata.version = capsule.metadata.version || 1;
 
     const sb = await this.initSupabase();
-    if (sb) {
-      try {
-        let userId = null;
-        try {
-          // Use the shared SupabaseClient's getUser method
-          const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
-          const user = client ? await client.getUser() : null;
-          if (user?.id) userId = user.id;
-        } catch (authErr) {
-          console.warn('[Storage] Supabase getUser failed, trying fallback:', authErr);
-        }
+    const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
+    const session = client ? await client.getSession() : null;
 
+    if (sb && session?.access_token) {
+      try {
+        let userId = session.user?.id;
+        if (!userId) {
+          try {
+            const user = client ? await client.getUser() : null;
+            if (user?.id) userId = user.id;
+          } catch {}
+        }
         if (!userId) {
           const localUser = await chrome.storage.local.get(['user']);
           if (localUser?.user?.id) {
@@ -291,7 +294,10 @@ const CapsuleStorage = {
 
   async deleteCapsule(id) {
     const sb = await this.initSupabase();
-    if (sb) {
+    const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
+    const session = client ? await client.getSession() : null;
+
+    if (sb && session?.access_token) {
       try {
         const { error } = await sb.from('capsules').delete().eq('id', id);
         if (error) throw error;
