@@ -101,13 +101,6 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 3. Click the **Load unpacked** button in the top-left corner.
 4. Select the **`source`** folder inside your project directory.
 
-### Step 3: Setup Google Sign-In (Optional)
-To enable multi-device cloud synchronization via Google:
-1. Go to the [Google Cloud Console](https://console.cloud.google.com/) and create a new project.
-2. Navigate to **APIs & Services > Credentials** and create an **OAuth client ID** of type **Chrome App/Extension**.
-3. Input your extension ID (found in `chrome://extensions/` after loading) into the configuration.
-4. Open the extension's [manifest.json](file:///e:/Capsule%20Extension/capsule-infinity-chrome-extension/source/manifest.json) file and replace the `oauth2.client_id` value placeholder (`"YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"`) with your client ID.
-
 🎉 **You're Done!** Just pin the Capsule Infinity icon to your toolbar for quick access.
 
 ## 📂 Project Architecture
