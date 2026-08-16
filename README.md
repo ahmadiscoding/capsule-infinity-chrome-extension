@@ -33,7 +33,7 @@ Brainstorming or debugging code across different model engines (e.g. migrating a
 
 ![Feature Cards](source/assets/banners/feature_banner.svg)
 
-* **AI Compression Backend (Supabase Edge Function)**: Server-side LLM engine supporting Gemini Flash & Groq (`llama-3.3-70b-versatile`) smart routing with 10s timeout failovers, without exposing provider API keys to client extensions.
+* **AI Compression Backend (Supabase Edge Function)**: Server-side LLM engine supporting AI smart routing with 10s timeout failovers, without exposing provider API keys to client extensions.
 * **Narrative Capsule Format**: Structured output with clear sections: `User Intent`, `Key decisions made`, `Constraints or requirements identified`, and `Technicalities/Details` saving 80–90% of tokens while preserving 100% of technical fidelity.
 * **Smart Deduplication Caching (Part 19)**: Lightweight conversation fingerprinting prevents redundant Edge Function calls and quota consumption when capturing unchanged chats.
 * **Atomic Usage & Capacity Metering**: Per-user monthly quota checks (`check_and_increment_usage`) and global daily capacity soft-caps (`increment_provider_daily`) enforced via PostgreSQL `SECURITY DEFINER` RPC functions.
