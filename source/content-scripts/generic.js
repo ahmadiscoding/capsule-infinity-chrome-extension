@@ -439,17 +439,56 @@
   }
 
   /**
-   * Task 3: Deep Clone & Sanitize DOM Node before text extraction
-   * Removes all inputs, file attachments, images, svgs, and buttons to prevent Windows file dialogs & CPU spikes
+   * Helper to check if a DOM node belongs to injected Extension UI
+   */
+  function isExtensionElement(el) {
+    if (!el || !el.closest) return false;
+    return !!el.closest([
+      '#ci-capture-modal',
+      '[class*="ci-"]',
+      '[id*="ci-"]',
+      '[class*="capsule-"]',
+      '[id*="capsule-"]',
+      '#capsule-injected-root',
+      '#capsule-root',
+      '.capsule-limit-overlay',
+      '.capsule-limit-card',
+      '.capsule-pricing-options',
+      '.btn-pro',
+      '.btn-dismiss',
+      '.ci-banner-wrapper',
+      '.ci-feedback-overlay',
+      '.ci-toast',
+      '.ci-floating-btn',
+      '.ci-dialogue-wrapper'
+    ].join(', '));
+  }
+
+  /**
+   * Deep Clone & Sanitize DOM Node before text extraction
+   * Removes all inputs, file attachments, images, svgs, buttons, and extension UI elements
    */
   function getSanitizedText(el) {
     if (!el) return '';
     try {
+      if (isExtensionElement(el)) return '';
       const clone = el.cloneNode(true);
-      clone.querySelectorAll('input, [type="file"], img, svg, button, .file-picker, label[for*="file" i], #ci-capture-modal, [class*="ci-"], [id*="ci-"]').forEach(e => {
+      const injectedSelectors = [
+        'input', '[type="file"]', 'img', 'svg', 'button', '.file-picker', 'label[for*="file" i]',
+        '#ci-capture-modal', '[class*="ci-"]', '[id*="ci-"]',
+        '[class*="capsule-"]', '[id*="capsule-"]', '#capsule-injected-root', '#capsule-root',
+        '.capsule-limit-overlay', '.capsule-limit-card', '.capsule-pricing-options',
+        '.btn-pro', '.btn-dismiss', '.ci-banner-wrapper', '.ci-feedback-overlay',
+        '.ci-toast', '.ci-floating-btn', '.ci-dialogue-wrapper'
+      ].join(', ');
+
+      clone.querySelectorAll(injectedSelectors).forEach(e => {
         try { e.remove(); } catch(err) {}
       });
+
       let text = clone.innerText?.trim() || '';
+      // Clean residual raw HTML markup tags if present
+      text = text.replace(/<[^>]*>/g, '').trim();
       text = text.replace(/^(You|Gemini|Claude|ChatGPT|User|Assistant)\s+said:?/i, '').trim();
       return text;
     } catch(e) {
@@ -545,11 +584,34 @@
     }
   };
 
-  // Keep in-memory cache of last intercepted conversation payload
-  let lastInterceptedMessages = null;
+  // In-memory cache of last intercepted conversation payload, strictly bound to URL
+  let lastInterceptedCache = {
+    pageUrl: null,
+    messages: null,
+    timestamp: 0
+  };
+
+  // Invalidate cache immediately on navigation / URL change
+  let activeNavUrl = window.location.href;
+  const invalidateStaleNetworkCache = () => {
+    if (window.location.href !== activeNavUrl) {
+      activeNavUrl = window.location.href;
+      lastInterceptedCache = { pageUrl: null, messages: null, timestamp: 0 };
+    }
+  };
+  window.addEventListener('popstate', invalidateStaleNetworkCache);
+  window.addEventListener('hashchange', invalidateStaleNetworkCache);
+  setInterval(invalidateStaleNetworkCache, 1000);
 
   window.addEventListener('ci-network-payload', (event) => {
-    const { platform, data } = event.detail;
+    const { platform, data, pageUrl } = event.detail;
+    const targetUrl = pageUrl || window.location.href;
+
+    // Discard payload if it belongs to a different URL than current window
+    if (targetUrl !== window.location.href) {
+      return;
+    }
+
     let msgs = null;
     try {
       if (platform === 'chatgpt') {
@@ -561,8 +623,12 @@
       }
 
       if (msgs && msgs.length > 0) {
-        lastInterceptedMessages = msgs;
-        console.log(`[Capsule Extractor] Intercepted ${msgs.length} messages from network.`);
+        lastInterceptedCache = {
+          pageUrl: window.location.href,
+          messages: msgs,
+          timestamp: Date.now()
+        };
+        console.log(`[Capsule Extractor] Intercepted ${msgs.length} messages for target URL: ${window.location.href}`);
       }
     } catch (e) {
       console.warn('[Capsule Extractor] Error processing intercepted payload:', e);
@@ -571,9 +637,15 @@
 
   const ExtractionController = {
     async tryNetworkExtraction() {
-      // 1. Check in-memory intercepted cache
-      if (lastInterceptedMessages && lastInterceptedMessages.length > 0) {
-        return lastInterceptedMessages;
+      // 1. Check in-memory intercepted cache with STRICT URL MATCH & freshness (< 5 mins)
+      if (
+        lastInterceptedCache.messages &&
+        lastInterceptedCache.messages.length > 0 &&
+        lastInterceptedCache.pageUrl === window.location.href &&
+        (Date.now() - lastInterceptedCache.timestamp) < 300000
+      ) {
+        console.log(`[Capsule Extractor] Using URL-matched Tier 1 payload for ${window.location.href}`);
+        return lastInterceptedCache.messages;
       }
 
       // 2. Fallback to active API fetch (like ChatGPT endpoints)
@@ -726,7 +798,7 @@
     },
 
     async extract() {
-      // Tier 1: Network Capture
+      // Tier 1: Network Capture (Lossless & Zero scroll)
       try {
         const apiMessages = await this.tryNetworkExtraction();
         if (apiMessages && apiMessages.length > 0) {
@@ -743,10 +815,14 @@
         return extractCurrentVisibleMessages(document);
       }
 
-      console.log('[Capsule Extractor Debug] findScrollContainer selectors matched container.');
-      console.log('[Capsule Extractor Debug] Target container class:', container.className, 'HTML preview:', container.outerHTML.slice(0, 250));
+      // Check currently visible messages first (Zero scroll jump)
+      const visibleMsgs = extractCurrentVisibleMessages(container);
+      if (visibleMsgs && visibleMsgs.length > 0) {
+        console.log(`[Capsule Extractor] Captured ${visibleMsgs.length} visible messages directly without page scroll.`);
+        return visibleMsgs;
+      }
 
-      // Tier 2: Force-Load & Select-All
+      // Tier 2: Force-Load & Select-All (Restores scroll position)
       try {
         console.log('[Capsule Extractor] Attempting Tier 2: Force-Load + Select-All.');
         const tier2Text = await this.tryTier2ForceLoadAndSelectAll(container);
@@ -777,7 +853,7 @@
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
           acceptNode(node) {
             try {
-              if (node.closest('#ci-capture-modal') || node.closest('[class*="ci-"]') || node.closest('[id*="ci-"]')) {
+              if (isExtensionElement(node)) {
                 return NodeFilter.FILTER_REJECT;
               }
               if (node && node.hasAttribute && node.hasAttribute('data-message-author-role')) {
@@ -798,8 +874,7 @@
       } else if (PLATFORM === 'claude') {
         root.querySelectorAll('[class*="message"], [data-testid]').forEach(el => {
           try {
-            if (!el) return;
-            if (el.closest('#ci-capture-modal') || el.closest('[class*="ci-"]') || el.closest('[id*="ci-"]')) return;
+            if (!el || isExtensionElement(el)) return;
             const text = getSanitizedText(el);
             if (!text || text.length < 5) return;
             const testId = el.getAttribute('data-testid') || '';
@@ -811,8 +886,7 @@
       } else if (PLATFORM === 'gemini') {
         root.querySelectorAll('model-response, [class*="query-text"], [class*="response-container"]').forEach(el => {
           try {
-            if (!el) return;
-            if (el.closest('#ci-capture-modal') || el.closest('[class*="ci-"]') || el.closest('[id*="ci-"]')) return;
+            if (!el || isExtensionElement(el)) return;
             const text = getSanitizedText(el);
             if (!text || text.length < 5) return;
             const tagName = el.tagName?.toLowerCase() || '';
@@ -823,8 +897,7 @@
       } else if (PLATFORM === 'deepseek') {
         root.querySelectorAll('.ds-message').forEach(el => {
           try {
-            if (!el) return;
-            if (el.closest('#ci-capture-modal') || el.closest('[class*="ci-"]') || el.closest('[id*="ci-"]')) return;
+            if (!el || isExtensionElement(el)) return;
             const isAssistant = el.querySelector('.ds-markdown') !== null;
             if (isAssistant) {
               const markdownEl = el.querySelector('.ds-markdown');
@@ -850,8 +923,7 @@
       } else {
         root.querySelectorAll('[data-message-author-role], .message-content, .prose, [role="log"] > div').forEach(el => {
           try {
-            if (!el) return;
-            if (el.closest('#ci-capture-modal') || el.closest('[class*="ci-"]') || el.closest('[id*="ci-"]')) return;
+            if (!el || isExtensionElement(el)) return;
             const text = getSanitizedText(el);
             if (text && text.length > 5) {
               const role = el.getAttribute('data-message-author-role') || 'unknown';
@@ -901,6 +973,65 @@
       }
     }
     return document.querySelector('main') || document.documentElement || document.body;
+  }
+
+  // ============================================================
+  // Part 19: Conversation Fingerprinting & Deduplication Cache
+  // ============================================================
+  function getConversationFingerprint(platform, conversationUrl, visibleMessageCount, lastMessageSnippet) {
+    const cleanSnippet = (lastMessageSnippet || '').substring(0, 80).replace(/\s+/g, ' ').trim();
+    return `${platform}::${conversationUrl}::${visibleMessageCount}::${cleanSnippet}`;
+  }
+
+  async function getCachedCapture(conversationUrl, fingerprint) {
+    try {
+      const res = await chrome.storage.local.get(['captureCache']);
+      const cache = res.captureCache || {};
+      const entry = cache[conversationUrl];
+      // Only treat as cache hit if it was generated by the AI backend
+      if (entry && entry.fingerprint === fingerprint && entry.servedBy) {
+        console.log('[Capsule Cache] Fingerprint match! Reusing cached AI capsule for:', conversationUrl);
+        return entry;
+      }
+    } catch (e) {
+      console.warn('[Capsule Cache] Error reading cache:', e);
+    }
+    return null;
+  }
+
+  async function setCachedCapture(conversationUrl, fingerprint, captureData) {
+    // Only cache if the capsule was served by the AI backend
+    if (!captureData.servedBy) return;
+
+    try {
+      const res = await chrome.storage.local.get(['captureCache']);
+      let cache = res.captureCache || {};
+
+      // Prune entries older than 30 days and any non-AI entries
+      const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+      const cleaned = {};
+      for (const [url, item] of Object.entries(cache)) {
+        if (item && item.servedBy && item.capturedAt && item.capturedAt > thirtyDaysAgo) {
+          cleaned[url] = item;
+        }
+      }
+
+      cleaned[conversationUrl] = {
+        fingerprint: fingerprint,
+        compressedContent: captureData.compressedContent,
+        savingsPercent: captureData.savingsPercent,
+        rawTokens: captureData.rawTokens,
+        compressedTokens: captureData.compressedTokens,
+        json: captureData.json || [],
+        servedBy: captureData.servedBy,
+        capturedAt: Date.now()
+      };
+
+      await chrome.storage.local.set({ captureCache: cleaned });
+      console.log('[Capsule Cache] Saved new AI capsule cache entry for:', conversationUrl);
+    } catch (e) {
+      console.warn('[Capsule Cache] Error saving cache:', e);
+    }
   }
 
   async function extractConversationAsync() {
@@ -964,12 +1095,136 @@
       title = `${CapsuleUtils.getPlatformInfo(PLATFORM).name} Chat`;
     }
 
+    console.log(`[Capsule Capture Assertion] Page URL: ${window.location.href} | Extracted preview: "${rawFormatted.slice(0, 120).replace(/\n/g, ' ')}"`);
+
+    // Part 19: Check deduplication cache before calling AI / local compressor
+    let lastMessageSnippet = '';
+    if (Array.isArray(messagesOrText) && messagesOrText.length > 0) {
+      const lastMsg = messagesOrText[messagesOrText.length - 1];
+      lastMessageSnippet = lastMsg ? (lastMsg.content || '') : '';
+    } else if (typeof rawFormatted === 'string') {
+      lastMessageSnippet = rawFormatted.slice(-150);
+    }
+
+    const conversationUrl = window.location.href.split('#')[0];
+    const currentFingerprint = getConversationFingerprint(PLATFORM, conversationUrl, messageCount, lastMessageSnippet);
+
+    const cached = await getCachedCapture(conversationUrl, currentFingerprint);
+    if (cached) {
+      console.log('[Capsule Cache] Conversation unchanged — returning cached capsule without AI API call.');
+      return {
+        title: title || `${CapsuleUtils.getPlatformInfo(PLATFORM).name} Chat`,
+        content: cached.compressedContent,
+        rawContent: rawFormatted,
+        compressedContent: cached.compressedContent,
+        savingsPercent: cached.savingsPercent,
+        rawTokens: cached.rawTokens,
+        compressedTokens: cached.compressedTokens,
+        messageCount: messageCount,
+        platform: PLATFORM,
+        json: cached.json || [],
+        servedBy: cached.servedBy,
+        isFromCache: true
+      };
+    }
+
     let compressedObj = { compressedContent: rawFormatted, savingsPercent: 0, rawTokens: 0, compressedTokens: 0, json: [] };
-    if (typeof CapsuleCompressor !== 'undefined') {
-      const existingEntities = currentCapture?.json || [];
-      compressedObj = CapsuleCompressor.compress(messagesOrText, { 
-        title: title,
-        existingEntities: existingEntities
+    let aiServedBy = null;
+
+    // Try AI Compression Backend via Edge Function first
+    let aiRes = null;
+    console.time('[Capsule Capture Timing] AI Edge Function Compression');
+    try {
+      if (typeof CapsuleStorage !== 'undefined' && CapsuleStorage.requestAICompression) {
+        console.log('[Capsule AI Path] CapsuleStorage.requestAICompression found, calling Edge Function...');
+        console.log('[Capsule AI Path] Transcript length being sent:', rawFormatted.length);
+        aiRes = await CapsuleStorage.requestAICompression(rawFormatted);
+        console.log('[Capsule AI Path] Edge Function response:', JSON.stringify(aiRes).substring(0, 500));
+      } else {
+        console.warn('[Capsule AI Path] CapsuleStorage.requestAICompression NOT available — skipping AI path');
+      }
+    } catch (e) {
+      console.warn('[Capsule AI Path] AI Backend compression error, falling back to local engine:', e);
+    } finally {
+      console.timeEnd('[Capsule Capture Timing] AI Edge Function Compression');
+    }
+
+    if (aiRes && aiRes.capsule) {
+      // Reconstruct human-readable narrative markdown from backend JSON schema (Part 13)
+      const jsonCapsule = aiRes.capsule;
+      aiServedBy = aiRes.servedBy;
+
+      const lines = ["**ACTIVE CAPSULE CONTEXT**"];
+      if (jsonCapsule.user_intent) {
+        lines.push(`• **User Intent**: ${jsonCapsule.user_intent}`);
+      } else if (jsonCapsule.intent) {
+        lines.push(`• **User Intent**: ${jsonCapsule.intent}`);
+      }
+
+      if (jsonCapsule.key_decisions) {
+        lines.push(`• **Key decisions made**: ${jsonCapsule.key_decisions}`);
+      } else if (Array.isArray(jsonCapsule.decisions) && jsonCapsule.decisions.length > 0) {
+        lines.push(`• **Key decisions made**: ${jsonCapsule.decisions.join(' ')}`);
+      }
+
+      if (jsonCapsule.constraints) {
+        lines.push(`• **Constraints or requirements identified**: ${jsonCapsule.constraints}`);
+      } else if (Array.isArray(jsonCapsule.constraints) && jsonCapsule.constraints.length > 0) {
+        lines.push(`• **Constraints or requirements identified**: ${jsonCapsule.constraints.join(' ')}`);
+      }
+
+      if (jsonCapsule.technicalities) {
+        lines.push(`• **Technicalities/Details**: ${jsonCapsule.technicalities}`);
+      } else if (Array.isArray(jsonCapsule.facts) && jsonCapsule.facts.length > 0) {
+        lines.push(`• **Technicalities/Details**: ${jsonCapsule.facts.join(' ')}`);
+      }
+
+      const md = lines.join("\n\n");
+
+      const rawTokens = CapsuleCompressor ? CapsuleCompressor.estimateTokens(rawFormatted) : Math.ceil(rawFormatted.length / 4);
+      const compressedTokens = CapsuleCompressor ? CapsuleCompressor.estimateTokens(md) : Math.ceil(md.length / 4);
+      const savingsPercent = rawTokens > 0 ? Math.max(0, Math.round(((rawTokens - compressedTokens) / rawTokens) * 100)) : 0;
+
+      compressedObj = {
+        compressedContent: md.trim(),
+        savingsPercent,
+        rawTokens,
+        compressedTokens,
+        json: [jsonCapsule]
+      };
+    } else {
+      // Handle AI Backend Errors / Limits / Logged out fallback
+      if (aiRes?.error === "LIMIT_REACHED") {
+        setTimeout(() => showLimitReachedModal(aiRes.monthlyLimit || 30), 500);
+      } else if (aiRes?.error === "SESSION_EXPIRED") {
+        // Part 16: Session was present but expired, and refresh failed — user must re-login
+        console.warn('[Capsule AI Path] Session expired and refresh failed. Showing sign-in nudge.');
+        setTimeout(() => showLoggedOutBanner(), 500);
+      } else if (aiRes?.error === "NOT_LOGGED_IN") {
+        setTimeout(() => showLoggedOutBanner(), 500);
+      } else if (aiRes?.error) {
+        console.warn('[Capsule AI Path] AI backend returned error:', aiRes.error, aiRes.raw || '');
+      }
+
+      // Fallback to local rule-based compressor
+      if (typeof CapsuleCompressor !== 'undefined') {
+        const existingEntities = currentCapture?.json || [];
+        compressedObj = CapsuleCompressor.compress(messagesOrText, { 
+          title: title,
+          existingEntities: existingEntities
+        });
+      }
+    }
+
+    // Part 19: Save newly computed compression to cache
+    if (compressedObj && compressedObj.compressedContent) {
+      await setCachedCapture(conversationUrl, currentFingerprint, {
+        compressedContent: compressedObj.compressedContent,
+        savingsPercent: compressedObj.savingsPercent,
+        rawTokens: compressedObj.rawTokens,
+        compressedTokens: compressedObj.compressedTokens,
+        json: compressedObj.json || [],
+        servedBy: aiServedBy
       });
     }
 
@@ -983,21 +1238,126 @@
       compressedTokens: compressedObj.compressedTokens,
       messageCount: messageCount,
       platform: PLATFORM,
-      json: compressedObj.json || []
+      json: compressedObj.json || [],
+      servedBy: aiServedBy
     };
   }
 
+  let captureBannerInterval = null;
+
+  function showCaptureLoadingBanner() {
+    if (captureBannerInterval) clearInterval(captureBannerInterval);
+
+    const statusMessages = [
+      "Reading your entire life story… give us a sec.",
+      "Condensing 10,000 words of brilliance into a tiny capsule.",
+      "Arguing with the AI about what actually matters in this chat...",
+      "Extracting actual facts and ignoring the fluff.",
+      "Reading between the lines…",
+      "Compressing the important bits…",
+      "Almost there…"
+    ];
+
+    let msgIdx = 0;
+
+    let wrapper = document.querySelector('.ci-banner-wrapper');
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.className = 'ci-banner-wrapper';
+      document.body.appendChild(wrapper);
+    }
+
+    // Remove any existing capture loading banner
+    document.querySelector('.ci-banner-capture-loading')?.remove();
+
+    const banner = document.createElement('div');
+    banner.className = 'ci-banner ci-banner-capture-loading';
+    banner.innerHTML = `
+      <span class="ci-banner-icon">⚡</span>
+      <span class="ci-banner-text">${statusMessages[0]}</span>
+    `;
+
+    wrapper.appendChild(banner);
+
+    // Trigger entrance animation next frame
+    requestAnimationFrame(() => {
+      banner.classList.add('ci-banner-visible');
+    });
+
+    // Rotate messages every 2.2 seconds
+    captureBannerInterval = setInterval(() => {
+      msgIdx = (msgIdx + 1) % statusMessages.length;
+      const textEl = banner.querySelector('.ci-banner-text');
+      if (textEl) {
+        textEl.style.opacity = '0';
+        textEl.style.transform = 'translateY(-4px)';
+        setTimeout(() => {
+          textEl.textContent = statusMessages[msgIdx];
+          textEl.style.opacity = '1';
+          textEl.style.transform = 'translateY(0)';
+        }, 150);
+      }
+    }, 2200);
+  }
+
+  function updateCaptureLoadingBannerSuccess(message = "Capsule captured successfully!") {
+    if (captureBannerInterval) {
+      clearInterval(captureBannerInterval);
+      captureBannerInterval = null;
+    }
+    const banner = document.querySelector('.ci-banner-capture-loading');
+    if (banner) {
+      banner.className = 'ci-banner ci-banner-capture-success ci-banner-visible';
+      const icon = banner.querySelector('.ci-banner-icon');
+      const text = banner.querySelector('.ci-banner-text');
+      if (icon) icon.textContent = '✨';
+      if (text) {
+        text.textContent = message;
+        text.style.opacity = '1';
+        text.style.color = '#10b981';
+      }
+      setTimeout(() => hideCaptureLoadingBanner(), 1400);
+    }
+  }
+
+  function hideCaptureLoadingBanner() {
+    if (captureBannerInterval) {
+      clearInterval(captureBannerInterval);
+      captureBannerInterval = null;
+    }
+    const banner = document.querySelector('.ci-banner-capture-loading, .ci-banner-capture-success');
+    if (banner) {
+      banner.classList.remove('ci-banner-visible');
+      banner.classList.add('ci-banner-exiting');
+      setTimeout(() => {
+        banner.remove();
+        if (activeBannerEl === banner) activeBannerEl = null;
+      }, 220);
+    }
+  }
+
   // ============================================================
-  // CAPTURE HANDLER with Animation
+  // CAPTURE HANDLER with Instant Loading Feedback & Animation
   // ============================================================
   async function handleCapture() {
-    showToast('Capturing full chat history...', 'info');
+    // 1. Trigger instant UI loading banner synchronously on click before network/scraping
+    showCaptureLoadingBanner();
+
     try {
       const conv = await extractConversationAsync();
 
       if (!conv || !conv.content) {
+        hideCaptureLoadingBanner();
         showToast('No conversation found to capture', 'error');
         return;
+      }
+
+      // Smoothly transition banner state to success
+      if (conv.isFromCache) {
+        updateCaptureLoadingBannerSuccess("Using existing capsule — no changes since last capture");
+        showToast('Using existing capsule (no changes)', 'info');
+      } else {
+        updateCaptureLoadingBannerSuccess("Capsule captured successfully!");
       }
 
       // Get source rect for animation
@@ -1010,6 +1370,7 @@
         showCaptureModal(conv);
       });
     } catch (err) {
+      hideCaptureLoadingBanner();
       console.error('[Capture] Capture failed or timed out:', err);
       showToast(err.message || 'Capture timed out', 'error');
     }
@@ -1029,6 +1390,10 @@
 
     const savingsText = currentCapture.savingsPercent > 0 ? `⚡ ${currentCapture.savingsPercent}% Tokens Saved (~${currentCapture.compressedTokens} tokens)` : '';
 
+    const engineLabel = currentCapture.servedBy 
+      ? `AI (rich format)`
+      : `Local (basic format)`;
+
     overlay.innerHTML = `
       <div class="ci-modal">
         <div class="ci-modal-header">
@@ -1042,7 +1407,7 @@
           </div>
           <div class="ci-form-group">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-              <label class="ci-form-label" style="margin:0;">Content <span class="ci-platform-badge" style="background:${pi.color}20;color:${pi.color};margin-left:6px;">${pi.icon} ${pi.name} \u00B7 ${currentCapture.messageCount} messages</span></label>
+              <label class="ci-form-label" style="margin:0;">Content <span class="ci-platform-badge" style="background:${pi.color}20;color:${pi.color};margin-left:6px;">${pi.icon} ${pi.name} \u00B7 ${engineLabel} \u00B7 ${currentCapture.messageCount} msgs</span></label>
               <span id="ci-token-badge" style="font-size:10px;font-weight:600;color:#10b981;background:rgba(16,185,129,0.12);padding:2px 8px;border-radius:10px;">${savingsText}</span>
             </div>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
@@ -1242,15 +1607,14 @@
 
       if (!content) { showToast('Content is required', 'error'); return null; }
 
-      // Prepend Systemic AI Context to the content
-      const formattedContent = CapsuleUtils.formatWithSystemContext(content);
-
+      // NOTE: formatWithSystemContext header is only applied on clipboard-copy & injection,
+      // NOT on save. The stored capsule content stays clean.
       const capsuleData = {
         title,
-        content: formattedContent,
+        content: content,
         platform: PLATFORM,
         sourceUrl: window.location.href,
-        folderId: overlay.querySelector('#ci-cap-folder').value || null,
+        folderId: overlay.querySelector('#ci-cap-folder').value || 'default',
         tags,
         messageCount: currentCapture.messageCount,
         savingsPercent: currentCapture.savingsPercent || 0,
@@ -1350,7 +1714,7 @@
       folders = await CapsuleStorage.getFolders();
     }
 
-    select.innerHTML = '<option value="">General</option>' +
+    select.innerHTML = '<option value="default">General</option>' +
       folders.map(f => `<option value="${f.id}">${CapsuleUtils.sanitize(f.name)}</option>`).join('');
   }
 
@@ -1422,6 +1786,11 @@
     });
 
     dismissTimeout = setTimeout(closeToast, 6000);
+
+    // Trigger feedback prompt check after successful capture save
+    if (typeof checkAndShowFeedbackCard === 'function') {
+      checkAndShowFeedbackCard();
+    }
   }
 
   function showToast(message, type = 'info') {
@@ -1432,6 +1801,424 @@
     toast.innerHTML = `<span>${icons[type] || '\u{1F48A}'}</span><span>${CapsuleUtils.sanitize(message)}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => { toast.classList.add('ci-toast-exit'); setTimeout(() => toast.remove(), 300); }, 3000);
+  }
+
+  // ============================================================
+  // LIMIT REACHED MODAL (Mailto Pro Lead Capture - Part 7)
+  // ============================================================
+  function showLimitReachedModal(limitCount = 30) {
+    document.querySelector('.capsule-limit-overlay')?.remove();
+
+    const supportEmail = 'capsuleinfinity.support@gmail.com';
+
+    const modalHtml = `
+      <div class="capsule-limit-overlay">
+        <div class="capsule-limit-card">
+          <h3>⚡ Monthly AI Quota Reached</h3>
+          <p>You've used all ${limitCount} free AI capsules this month. This capsule was saved using the local fast engine instead.</p>
+          <div class="capsule-pricing-options">
+            <button id="upgrade-pro-email" class="btn-pro">⚡ Request Pro Access ($2)</button>
+          </div>
+          <button id="close-limit-modal" class="btn-dismiss">Continue Free</button>
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML("beforeend", modalHtml);
+
+    const upgradeBtn = document.getElementById("upgrade-pro-email");
+    const closeBtn = document.getElementById("close-limit-modal");
+
+    if (upgradeBtn) {
+      upgradeBtn.onclick = async () => {
+        let user = null;
+        try {
+          if (typeof SupabaseClient !== 'undefined') {
+            user = await SupabaseClient.getUser();
+          }
+        } catch (e) {}
+
+        const recipient = supportEmail;
+        const subject = "Capsule Infinity Pro Upgrade ($2)";
+        const body = 
+          `Hi,\n\nI've reached my monthly free limit and would like to activate Pro for $2.\n\n` +
+          `User ID: ${user?.id || "N/A"}\nAccount Email: ${user?.email || "N/A"}\n\n` +
+          `Please let me know how to pay and get this activated.`;
+
+        if (typeof CapsuleUtils !== 'undefined' && CapsuleUtils.openGmailCompose) {
+          CapsuleUtils.openGmailCompose(recipient, subject, body);
+        } else {
+          const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipient)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+          window.open(gmailUrl, "_blank");
+        }
+      };
+    }
+
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        document.querySelector(".capsule-limit-overlay")?.remove();
+      };
+    }
+  }
+
+  // ============================================================
+  // LOGGED OUT NUDGE BANNER (Part 6)
+  // ============================================================
+  function showLoggedOutBanner() {
+    showContextualBanner({
+      id: 'logged-out-nudge',
+      type: 'logged-out',
+      icon: '🔒',
+      text: 'Sign in for AI-powered capsules — richer context, fewer tokens. Or continue with the free local compressor.',
+      actionText: 'Sign in',
+      onAction: () => {
+        chrome.runtime.sendMessage({ type: 'TRIGGER_GOOGLE_AUTH' });
+      },
+      persistent: true
+    });
+  }
+
+  // ============================================================
+  // CONTEXTUAL BANNER COMPONENT (Part 4 & Part 11)
+  // Signal-driven, prioritized, dismissible, daily reset
+  // ============================================================
+  let activeBannerEl = null;
+  let bannerAutoDismissTimer = null;
+  let sessionBannerDismissed = false;
+
+  async function checkAndShowContextualBanner(forceCheck = false) {
+    try {
+      // Single source of truth: Do not show if a banner is already mounted or dismissed this session
+      if (activeBannerEl || document.querySelector('.ci-banner')) return;
+      if (sessionBannerDismissed && !forceCheck) return;
+
+      const today = new Date().toISOString().split('T')[0];
+      const storage = await chrome.storage.local.get(['bannerResetDate', 'shownBannersToday']);
+
+      let resetDate = storage.bannerResetDate;
+      let shownBanners = storage.shownBannersToday || {};
+
+      // Reset daily flags
+      if (resetDate !== today) {
+        resetDate = today;
+        shownBanners = {};
+        await chrome.storage.local.set({ bannerResetDate: today, shownBannersToday: {} });
+      }
+
+      // Priority 1: Rate-limit language detected on page
+      const pageText = document.body?.innerText || '';
+      const rateLimitPattern = /you've reached your|message limit|try again later|upgrade to continue|rate limit|hourly limit|too many requests/i;
+      if (rateLimitPattern.test(pageText) && !shownBanners['trigger1']) {
+        shownBanners['trigger1'] = true;
+        await chrome.storage.local.set({ shownBannersToday: shownBanners });
+        showContextualBanner({
+          id: 'trigger1',
+          type: 'trigger-1',
+          icon: '⚡',
+          text: "Hit a limit? Your context is already saved — pick it up in Claude, Gemini, or Perplexity without losing anything.",
+          actionText: 'Open Picker',
+          onAction: () => {
+            const wrapper = document.getElementById(DIALOGUE_BTN_ID);
+            const menu = wrapper?.querySelector('#ci-dialogue-menu');
+            if (menu) {
+              loadCapsuleMenu();
+              menu.classList.add('open');
+            } else {
+              chrome.runtime.sendMessage({ type: 'OPEN_SIDEBAR' });
+            }
+          },
+          persistent: true
+        });
+        return;
+      }
+
+      // Priority 2: Long session (>20 messages)
+      const currentMessagesCount = (document.querySelectorAll('[data-message-author-role], [class*="message"], .ds-message, [role="log"] > div').length);
+      if (currentMessagesCount >= 20 && !shownBanners['trigger2']) {
+        shownBanners['trigger2'] = true;
+        await chrome.storage.local.set({ shownBannersToday: shownBanners });
+        showContextualBanner({
+          id: 'trigger2',
+          type: 'trigger-2',
+          icon: '⏳',
+          text: "This chat's getting long — capture it now so you don't lose the thread.",
+          actionText: 'Capture Now',
+          onAction: () => handleCapture(),
+          autoDismissMs: 8000
+        });
+        return;
+      }
+
+      // Priority 3: Saved context available on new chat
+      const allCapsules = await CapsuleStorage.getAllCapsules();
+      const isNewChat = currentMessagesCount <= 2;
+      if (isNewChat && allCapsules.length > 0 && !shownBanners['trigger3']) {
+        shownBanners['trigger3'] = true;
+        await chrome.storage.local.set({ shownBannersToday: shownBanners });
+        showContextualBanner({
+          id: 'trigger3',
+          type: 'trigger-3',
+          icon: '💊',
+          text: "You have saved context from earlier — want to bring it into this chat?",
+          actionText: 'Bring in Context',
+          onAction: () => {
+            const wrapper = document.getElementById(DIALOGUE_BTN_ID);
+            const menu = wrapper?.querySelector('#ci-dialogue-menu');
+            if (menu) {
+              loadCapsuleMenu();
+              menu.classList.add('open');
+            }
+          },
+          autoDismissMs: 8000
+        });
+        return;
+      }
+
+      // Priority 4: Daily idle prompt (only once per day on initial load)
+      if (!shownBanners['trigger4']) {
+        shownBanners['trigger4'] = true;
+        await chrome.storage.local.set({ shownBannersToday: shownBanners });
+        showContextualBanner({
+          id: 'trigger4',
+          type: 'trigger-4',
+          icon: '✨',
+          text: "Capsule is on — it's quietly saving context as you go.",
+          autoDismissMs: 8000
+        });
+      }
+    } catch (err) {
+      console.warn('[Contextual Banner Check Error]:', err);
+    }
+  }
+
+  function showContextualBanner(config) {
+    if (bannerAutoDismissTimer) {
+      clearTimeout(bannerAutoDismissTimer);
+      bannerAutoDismissTimer = null;
+    }
+
+    if (activeBannerEl) {
+      activeBannerEl.remove();
+      activeBannerEl = null;
+    }
+
+    let wrapper = document.querySelector('.ci-banner-wrapper');
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.className = 'ci-banner-wrapper';
+      document.body.appendChild(wrapper);
+    }
+
+    const banner = document.createElement('div');
+    banner.className = `ci-banner ci-banner-${config.type || 'trigger-4'}`;
+    
+    let actionsHtml = '';
+    if (config.actionText) {
+      actionsHtml += `<button class="ci-banner-btn" id="ci-banner-act-btn">${CapsuleUtils.sanitize(config.actionText)}</button>`;
+    }
+    actionsHtml += `<button class="ci-banner-dismiss" id="ci-banner-dis-btn" aria-label="Dismiss banner">&times;</button>`;
+
+    banner.innerHTML = `
+      <span class="ci-banner-icon">${config.icon || '💊'}</span>
+      <span class="ci-banner-text">${CapsuleUtils.sanitize(config.text)}</span>
+      <div class="ci-banner-actions">${actionsHtml}</div>
+    `;
+
+    wrapper.appendChild(banner);
+    activeBannerEl = banner;
+
+    // Entrance animation
+    requestAnimationFrame(() => {
+      banner.classList.add('ci-banner-visible');
+    });
+
+    const dismiss = () => {
+      if (bannerAutoDismissTimer) {
+        clearTimeout(bannerAutoDismissTimer);
+        bannerAutoDismissTimer = null;
+      }
+      sessionBannerDismissed = true;
+      banner.classList.remove('ci-banner-visible');
+      banner.classList.add('ci-banner-exiting');
+      setTimeout(() => {
+        banner.remove();
+        if (activeBannerEl === banner) activeBannerEl = null;
+      }, 220);
+    };
+
+    const actionBtn = banner.querySelector('#ci-banner-act-btn');
+    const dismissBtn = banner.querySelector('#ci-banner-dis-btn');
+
+    if (actionBtn) {
+      actionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        actionBtn.style.transform = 'scale(0.95)';
+        setTimeout(() => {
+          if (config.onAction) config.onAction();
+          dismiss();
+        }, 100);
+      });
+    }
+
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dismiss();
+      });
+    }
+
+    if (config.autoDismissMs && !config.persistent) {
+      bannerAutoDismissTimer = setTimeout(() => {
+        if (document.body.contains(banner)) dismiss();
+      }, config.autoDismissMs);
+    }
+  }
+
+  // ============================================================
+  // LIGHTWEIGHT 1–5 STAR FEEDBACK CARD (Part 8 & Part 20)
+  // Triggered once after 3rd AI capture, with single conditional follow-up for 1-2 stars
+  // ============================================================
+  async function checkAndShowFeedbackCard() {
+    try {
+      const storage = await chrome.storage.local.get([
+        'aiCaptureCount',
+        'feedbackPrompted',
+        'firstRating',
+        'firstRatingDate',
+        'firstRatingCaptureCount',
+        'feedbackFollowUpPrompted'
+      ]);
+      const currentCount = (storage.aiCaptureCount || 0) + 1;
+      await chrome.storage.local.set({ aiCaptureCount: currentCount });
+
+      // Trigger 1: Capsule #3 (One-time only)
+      if (currentCount >= 3 && !storage.feedbackPrompted) {
+        setTimeout(() => showFeedbackCard(false), 1200);
+        return;
+      }
+
+      // Trigger 2: Conditional follow-up if initial rating was 1 or 2 stars (Part 20)
+      // Fires after 15 more captures (capture #18+) OR after 14 days, whichever comes first
+      const isLowRating = storage.firstRating === 1 || storage.firstRating === 2;
+      if (isLowRating && !storage.feedbackFollowUpPrompted) {
+        const capturesSince = currentCount - (storage.firstRatingCaptureCount || 3);
+        const daysSince = (Date.now() - (storage.firstRatingDate || 0)) / (1000 * 60 * 60 * 24);
+
+        if (capturesSince >= 15 || daysSince >= 14) {
+          setTimeout(() => showFeedbackCard(true), 1200);
+        }
+      }
+    } catch (e) {
+      console.warn('[Feedback Check Error]:', e);
+    }
+  }
+
+  function showFeedbackCard(isFollowUp = false) {
+    document.querySelector('.ci-feedback-overlay')?.remove();
+
+    const title = isFollowUp ? '⭐ Quick Check-in' : '⭐ Rate Your AI Capsules';
+    const subtitle = isFollowUp
+      ? "Last time wasn't great — has it gotten better?"
+      : 'How well did the AI backend compress your conversation?';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'ci-feedback-overlay';
+    overlay.innerHTML = `
+      <div class="ci-feedback-card">
+        <h3>${title}</h3>
+        <p>${subtitle}</p>
+        <div class="ci-star-rating" id="ci-star-rating">
+          <span class="ci-star" data-val="1">★</span>
+          <span class="ci-star" data-val="2">★</span>
+          <span class="ci-star" data-val="3">★</span>
+          <span class="ci-star" data-val="4">★</span>
+          <span class="ci-star" data-val="5">★</span>
+        </div>
+        <textarea class="ci-feedback-textarea" id="ci-feedback-reason" placeholder="What could be improved? (optional)"></textarea>
+        <div class="ci-feedback-actions">
+          <button class="ci-btn-skip-feedback" id="ci-feedback-skip">Skip</button>
+          <button class="ci-btn-submit-feedback" id="ci-feedback-submit">Submit</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    let selectedRating = 0;
+    const stars = overlay.querySelectorAll('.ci-star');
+
+    stars.forEach(s => {
+      s.addEventListener('mouseover', () => {
+        const val = parseInt(s.dataset.val);
+        stars.forEach(st => {
+          st.classList.toggle('hovered', parseInt(st.dataset.val) <= val);
+        });
+      });
+
+      s.addEventListener('mouseout', () => {
+        stars.forEach(st => st.classList.remove('hovered'));
+      });
+
+      s.addEventListener('click', () => {
+        selectedRating = parseInt(s.dataset.val);
+        stars.forEach(st => {
+          st.classList.toggle('active', parseInt(st.dataset.val) <= selectedRating);
+        });
+      });
+    });
+
+    const closeFeedback = async () => {
+      if (isFollowUp) {
+        await chrome.storage.local.set({ feedbackFollowUpPrompted: true });
+      } else {
+        await chrome.storage.local.set({ feedbackPrompted: true });
+      }
+      overlay.remove();
+    };
+
+    overlay.querySelector('#ci-feedback-skip').onclick = () => closeFeedback();
+
+    overlay.querySelector('#ci-feedback-submit').onclick = async () => {
+      const reason = overlay.querySelector('#ci-feedback-reason').value.trim();
+      if (selectedRating === 0) {
+        showToast('Please select a star rating', 'info');
+        return;
+      }
+
+      try {
+        if (typeof SupabaseClient !== 'undefined') {
+          const client = await SupabaseClient.ensureInitialized();
+          const user = await SupabaseClient.getUser();
+          if (client) {
+            const insertPayload = {
+              rating: selectedRating,
+              reason: reason || null,
+              user_id: user?.id || null
+            };
+            if (isFollowUp) {
+              insertPayload.follow_up = true;
+            }
+            await client.from('user_feedback').insert(insertPayload);
+          }
+        }
+        showToast('Thank you for your feedback!', 'success');
+
+        if (!isFollowUp) {
+          const storage = await chrome.storage.local.get(['aiCaptureCount']);
+          await chrome.storage.local.set({
+            feedbackPrompted: true,
+            firstRating: selectedRating,
+            firstRatingDate: Date.now(),
+            firstRatingCaptureCount: storage.aiCaptureCount || 3
+          });
+        } else {
+          await chrome.storage.local.set({ feedbackFollowUpPrompted: true });
+        }
+      } catch (err) {
+        console.warn('[Feedback Submission Error]:', err);
+      }
+
+      overlay.remove();
+    };
   }
 
   // ============================================================
@@ -1463,11 +2250,11 @@
     });
     urlObserver.observe(document.body, { childList: true, subtree: true });
 
-    // Observer 3: Periodic check as ultimate fallback
+    // Observer 3: Periodic check for floating button & drag drop
     setInterval(() => {
       if (!document.getElementById(FLOATING_ID)) injectFloatingButton();
       setupInputDragDrop();
-    }, 2000);
+    }, 4000);
   }
 
   // ============================================================
@@ -1488,8 +2275,30 @@
   // INIT - Run immediately, then observe
   // ============================================================
   function init() {
+    // Purge any stale or non-AI entries from captureCache
+    try {
+      chrome.storage.local.get(['captureCache'], (res) => {
+        const cache = res?.captureCache || {};
+        let changed = false;
+        const clean = {};
+        for (const [k, v] of Object.entries(cache)) {
+          if (v && v.servedBy) {
+            clean[k] = v;
+          } else {
+            changed = true;
+          }
+        }
+        if (changed) chrome.storage.local.set({ captureCache: clean });
+      });
+    } catch (e) {}
+
     // Inject floating button immediately
     injectFloatingButton();
+
+    // Check contextual banner after DOM render
+    setTimeout(() => {
+      checkAndShowContextualBanner();
+    }, 1500);
 
     // If dialogue not found yet, start retrying to bind drag & drop
     if (!findDialogueBox()) {

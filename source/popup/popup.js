@@ -535,6 +535,32 @@ console.warn = function(...args) {
     }
   });
 
+  async function handleFeedbackClick() {
+    if (userDropdown) userDropdown.classList.remove('open');
+    let user = null;
+    try {
+      if (typeof SupabaseClient !== 'undefined') {
+        user = await SupabaseClient.getUser();
+      }
+    } catch (e) {}
+
+    const recipient = 'capsuleinfinity.support@gmail.com';
+    const subject = 'Capsule Infinity Feedback & Support';
+    const body = 
+      `Hi Support Team,\n\n` +
+      `User ID: ${user?.id || 'N/A'}\nAccount Email: ${user?.email || 'N/A'}\n\n` +
+      `Feedback or Support Request:\n`;
+
+    if (typeof CapsuleUtils !== 'undefined' && CapsuleUtils.openGmailCompose) {
+      CapsuleUtils.openGmailCompose(recipient, subject, body);
+    } else {
+      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipient)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(url, '_blank');
+    }
+  }
+
+  $('#floatingFeedbackBtn')?.addEventListener('click', handleFeedbackClick);
+
   // ---- Quick Actions ----
   $('#qaCapture').addEventListener('click', async () => {
     try {

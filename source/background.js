@@ -382,6 +382,102 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       syncFromServer().then(sendResponse).catch(e => sendResponse({ error: e.message }));
       return true;
 
+    case 'REQUEST_CAPSULE_COMPRESSION': {
+      (async () => {
+        try {
+          console.log('[Background AI Compression] Handler invoked. Getting session...');
+          const session = await SupabaseClient.getSession();
+          console.log('[Background AI Compression] Session result:', session ? `access_token present, expires_at: ${session.expires_at}` : 'NULL - no session');
+          
+          if (!session || !session.access_token) {
+            console.warn('[Background AI Compression] No active Supabase session. Responding NOT_LOGGED_IN.');
+            sendResponse({ error: "NOT_LOGGED_IN" });
+            return;
+          }
+
+          // Helper: make the actual Edge Function call with a given access_token
+          async function callEdgeFunction(accessToken) {
+            const { url } = await SupabaseClient.getConfig();
+            const cleanUrl = SupabaseClient.fixUrlTypo(url);
+            const functionUrl = `${cleanUrl}/functions/v1/compress`;
+            console.log('[Background AI Compression] Calling Edge Function:', functionUrl);
+            console.log('[Background AI Compression] Transcript length:', message.transcript?.length);
+
+            // 40s timeout on the fetch to Edge Function
+            const abortCtrl = new AbortController();
+            const fetchTimeout = setTimeout(() => abortCtrl.abort(), 40000);
+
+            let response;
+            try {
+              response = await fetch(functionUrl, {
+                method: "POST",
+                signal: abortCtrl.signal,
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${accessToken}`
+                },
+                body: JSON.stringify({ transcript: message.transcript })
+              });
+            } finally {
+              clearTimeout(fetchTimeout);
+            }
+
+            console.log('[Background AI Compression] Edge Function HTTP status:', response.status);
+            const result = await response.json().catch(() => ({}));
+            console.log('[Background AI Compression] Edge Function result keys:', Object.keys(result));
+            return { response, result };
+          }
+
+          // First attempt
+          let { response, result } = await callEdgeFunction(session.access_token);
+
+          // Part 16 step 2: Retry-once-on-401
+          // If the Edge Function rejected the token (expired), force-refresh and retry exactly once
+          if (response.status === 401) {
+            console.warn('[Background AI Compression] Got 401 UNAUTHORIZED. Attempting session refresh and retry...');
+            const refreshedSession = await SupabaseClient.forceRefreshSession();
+            if (refreshedSession && refreshedSession.access_token) {
+              console.log('[Background AI Compression] Session refreshed. Retrying Edge Function call...');
+              ({ response, result } = await callEdgeFunction(refreshedSession.access_token));
+              
+              if (response.status === 401) {
+                // Refresh succeeded but token still rejected — genuine re-login needed
+                console.error('[Background AI Compression] Retry still returned 401. User must re-login.');
+                sendResponse({ error: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." });
+                return;
+              }
+            } else {
+              // Refresh itself failed — the refresh_token is also expired, user must re-login
+              console.error('[Background AI Compression] Session refresh failed. User must re-login.');
+              sendResponse({ error: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." });
+              return;
+            }
+          }
+
+          if (response.status === 403 && result.error === "LIMIT_REACHED") {
+            sendResponse({ error: "LIMIT_REACHED", plan: result.plan, monthlyLimit: result.monthlyLimit });
+            return;
+          }
+          if (response.status === 503 && result.error === "DAILY_CAPACITY_REACHED") {
+            sendResponse({ error: "DAILY_CAPACITY_REACHED" });
+            return;
+          }
+          if (!response.ok) {
+            console.error('[Background AI Compression] Non-OK response:', response.status, JSON.stringify(result).substring(0, 300));
+            sendResponse({ error: "UNKNOWN", raw: result });
+            return;
+          }
+
+          console.log('[Background AI Compression] SUCCESS. servedBy:', result.servedBy);
+          sendResponse({ capsule: result.capsule, servedBy: result.servedBy });
+        } catch (err) {
+          console.error('[Background AI Compression Error]:', err);
+          sendResponse({ error: "UNKNOWN", raw: err.message });
+        }
+      })();
+      return true; // Keep message channel open for async response
+    }
+
     default:
       sendResponse({ error: 'Unknown message type' });
       return false;

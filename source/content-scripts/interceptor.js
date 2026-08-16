@@ -28,7 +28,7 @@
             const clone = response.clone();
             const data = await clone.json();
             window.dispatchEvent(new CustomEvent('ci-network-payload', {
-              detail: { platform: 'chatgpt', data }
+              detail: { platform: 'chatgpt', data, pageUrl: window.location.href, timestamp: Date.now() }
             }));
           } catch (e) {
             console.warn('[Interceptor] Failed to parse ChatGPT response:', e);
@@ -40,7 +40,7 @@
             const clone = response.clone();
             const data = await clone.json();
             window.dispatchEvent(new CustomEvent('ci-network-payload', {
-              detail: { platform: 'claude', data }
+              detail: { platform: 'claude', data, pageUrl: window.location.href, timestamp: Date.now() }
             }));
           } catch (e) {
             console.warn('[Interceptor] Failed to parse Claude response:', e);
@@ -52,7 +52,7 @@
             const clone = response.clone();
             const text = await clone.text();
             window.dispatchEvent(new CustomEvent('ci-network-payload', {
-              detail: { platform: 'gemini', data: text }
+              detail: { platform: 'gemini', data: text, pageUrl: window.location.href, timestamp: Date.now() }
             }));
           } catch (e) {
             console.warn('[Interceptor] Failed to parse Gemini response:', e);

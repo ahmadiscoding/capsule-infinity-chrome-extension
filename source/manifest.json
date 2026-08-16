@@ -19,7 +19,6 @@
     "https://claude.ai/*",
     "https://gemini.google.com/*",
     "https://chat.deepseek.com/*",
-    "https://kvdb.io/*",
     "https://*.openai.com/*",
     "https://anthropic.com/*",
     "https://copilot.microsoft.com/*",

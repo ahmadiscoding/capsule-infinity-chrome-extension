@@ -27,6 +27,10 @@ const CapsuleUtils = {
   },
   formatAttachments(c) { if(!c.attachments?.length)return''; let t='\n\nAttachments:\n'; c.attachments.forEach(a=>{t+=`- ${a.name||'File'} (${a.type||'file'})\n`;}); return t; },
   sanitize(s) { if(!s)return''; const d=document.createElement('div'); d.textContent=s; return d.innerHTML; },
+  openGmailCompose(recipient, subject, body) {
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipient || '')}&su=${encodeURIComponent(subject || '')}&body=${encodeURIComponent(body || '')}`;
+    window.open(url, "_blank");
+  },
   detectPlatform() { const u=window.location.href; if(u.includes('chatgpt.com'))return'chatgpt';if(u.includes('claude.ai'))return'claude';if(u.includes('gemini.google.com'))return'gemini';if(u.includes('deepseek.com'))return'deepseek';if(u.includes('mail.google.com'))return'gmail';if(u.includes('copilot.microsoft.com'))return'copilot';if(u.includes('perplexity.ai'))return'perplexity';if(u.includes('poe.com'))return'poe';if(u.includes('phind.com'))return'phind';if(u.includes('you.com'))return'you';if(u.includes('kagi.com'))return'kagi';return'unknown'; },
   async copyToClipboard(text) { try{await navigator.clipboard.writeText(text);return true;}catch{const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px';document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);return true;} }
 };

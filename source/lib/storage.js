@@ -62,16 +62,23 @@ const CapsuleStorage = {
       const user = client ? await client.getUser() : null;
       if (!user) return [];
 
-      // Query teams where user is a member
       const { data, error } = await sb
         .from('teams')
         .select('*')
         .contains('user_emails', [email]);
 
-      if (error) throw error;
+      if (error) {
+        // If table public.teams does not exist in Supabase schema, return empty array quietly
+        if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
+          return [];
+        }
+        throw error;
+      }
       return data || [];
     } catch (e) {
-      console.error('[Storage] Supabase getCloudTeams failed:', e.message || e.details || JSON.stringify(e));
+      if (!e.message?.includes('schema cache') && !e.message?.includes('does not exist')) {
+        console.warn('[Storage] Supabase getCloudTeams failed:', e.message || e.details || JSON.stringify(e));
+      }
       return [];
     }
   },
@@ -376,6 +383,37 @@ const CapsuleStorage = {
 
   async getSettings() {
     return new Promise(r => chrome.storage.local.get('settings', (res) => r(res.settings || { theme:'dark', showFloatingButton:true, dragDropEnabled:true, autoSync:true, syncInterval:300000 })));
+  },
+
+  async requestAICompression(rawTranscript) {
+    // Cap transcript to 30K chars — longer input causes provider timeouts
+    const MAX_TRANSCRIPT_LENGTH = 30000;
+    let transcript = rawTranscript || '';
+    if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
+      console.log(`[Storage] Truncating transcript from ${transcript.length} to ${MAX_TRANSCRIPT_LENGTH} chars for AI compression`);
+      transcript = transcript.substring(0, MAX_TRANSCRIPT_LENGTH);
+    }
+
+    return new Promise((resolve) => {
+      // 45s client-side timeout — if background handler doesn't respond, fail gracefully
+      const timeout = setTimeout(() => {
+        console.warn('[Storage] REQUEST_CAPSULE_COMPRESSION timed out after 45s');
+        resolve({ error: 'TIMEOUT' });
+      }, 45000);
+
+      chrome.runtime.sendMessage({
+        type: 'REQUEST_CAPSULE_COMPRESSION',
+        transcript: transcript
+      }, (response) => {
+        clearTimeout(timeout);
+        if (chrome.runtime.lastError) {
+          console.warn('[Storage] REQUEST_CAPSULE_COMPRESSION runtime error:', chrome.runtime.lastError.message);
+          resolve({ error: 'UNKNOWN' });
+        } else {
+          resolve(response || { error: 'UNKNOWN' });
+        }
+      });
+    });
   },
 
   async saveSettings(s) {

@@ -23,3 +23,6 @@ Thumbs.db
 *.njsproj
 *.sln
 *.swp
+
+# Supabase
+supabase/.temp/

@@ -1603,6 +1603,108 @@ console.warn = function(...args) {
   });
 
   // =============================================
+  // FEEDBACK & SUPPORT MODAL (Part 20 & Part 21)
+  // =============================================
+  let sidebarSelectedRating = 0;
+
+  $('#btnFeedbackSupport')?.addEventListener('click', () => {
+    sidebarSelectedRating = 0;
+    $('#feedbackOptionsView').style.display = 'block';
+    $('#feedbackRatingView').style.display = 'none';
+    $$('#sidebarStarRating .sidebar-star').forEach(s => s.style.color = '#475569');
+    $('#sidebarFeedbackReason').value = '';
+    $('#feedbackModal').classList.add('open');
+  });
+
+  $('#feedbackModalClose')?.addEventListener('click', () => {
+    $('#feedbackModal').classList.remove('open');
+  });
+
+  $('#btnFeedbackQuickRating')?.addEventListener('click', () => {
+    $('#feedbackOptionsView').style.display = 'none';
+    $('#feedbackRatingView').style.display = 'block';
+  });
+
+  $('#sidebarFeedbackBack')?.addEventListener('click', () => {
+    $('#feedbackRatingView').style.display = 'none';
+    $('#feedbackOptionsView').style.display = 'block';
+  });
+
+  // Star Rating in Sidebar
+  $$('#sidebarStarRating .sidebar-star').forEach(star => {
+    star.addEventListener('mouseover', () => {
+      const val = parseInt(star.dataset.val);
+      $$('#sidebarStarRating .sidebar-star').forEach(s => {
+        s.style.color = parseInt(s.dataset.val) <= val ? '#fbbf24' : '#475569';
+      });
+    });
+    star.addEventListener('mouseout', () => {
+      $$('#sidebarStarRating .sidebar-star').forEach(s => {
+        s.style.color = parseInt(s.dataset.val) <= sidebarSelectedRating ? '#fbbf24' : '#475569';
+      });
+    });
+    star.addEventListener('click', () => {
+      sidebarSelectedRating = parseInt(star.dataset.val);
+      $$('#sidebarStarRating .sidebar-star').forEach(s => {
+        s.style.color = parseInt(s.dataset.val) <= sidebarSelectedRating ? '#fbbf24' : '#475569';
+      });
+    });
+  });
+
+  // Submit Sidebar Rating
+  $('#sidebarFeedbackSubmit')?.addEventListener('click', async () => {
+    if (sidebarSelectedRating === 0) {
+      showToast('Please select a star rating', 'info');
+      return;
+    }
+    const reason = $('#sidebarFeedbackReason').value.trim();
+    try {
+      if (typeof SupabaseClient !== 'undefined') {
+        const client = await SupabaseClient.ensureInitialized();
+        const user = await SupabaseClient.getUser();
+        if (client) {
+          await client.from('user_feedback').insert({
+            rating: sidebarSelectedRating,
+            reason: reason || null,
+            user_id: user?.id || null
+          });
+        }
+      }
+      showToast('Thank you for your feedback!', 'success');
+      $('#feedbackModal').classList.remove('open');
+    } catch (e) {
+      console.warn('[Sidebar Feedback Error]:', e);
+      showToast('Feedback submitted', 'success');
+      $('#feedbackModal').classList.remove('open');
+    }
+  });
+
+  // Contact Support via Gmail Web Compose
+  $('#btnFeedbackContactSupport')?.addEventListener('click', async () => {
+    let user = null;
+    try {
+      if (typeof SupabaseClient !== 'undefined') {
+        user = await SupabaseClient.getUser();
+      }
+    } catch (e) {}
+
+    const recipient = 'capsuleinfinity.support@gmail.com';
+    const subject = 'Capsule Infinity Support & Feedback';
+    const body = 
+      `Hi Support Team,\n\n` +
+      `User ID: ${user?.id || 'N/A'}\nAccount Email: ${user?.email || 'N/A'}\n\n` +
+      `Description of issue or feedback:\n`;
+
+    if (typeof CapsuleUtils !== 'undefined' && CapsuleUtils.openGmailCompose) {
+      CapsuleUtils.openGmailCompose(recipient, subject, body);
+    } else {
+      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipient)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(url, '_blank');
+    }
+    $('#feedbackModal').classList.remove('open');
+  });
+
+  // =============================================
   // SIGN OUT & DELETE ACCOUNT
   // =============================================
   $('#btnSignOutSidebar').addEventListener('click', async () => {

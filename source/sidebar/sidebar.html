@@ -808,6 +808,17 @@
         </div>
 
         <div class="settings-section">
+          <div class="settings-section-title">Support & Feedback</div>
+          <div class="setting-row" style="cursor:pointer;" id="btnFeedbackSupport">
+            <div>
+              <div class="setting-label">Feedback & Support</div>
+              <div class="setting-desc">Rate your experience or contact support</div>
+            </div>
+            <span style="color:#a5b4fc;">💬</span>
+          </div>
+        </div>
+
+        <div class="settings-section">
           <div class="settings-section-title">Account</div>
           <div class="setting-row" style="cursor:pointer;" id="btnSignOutSidebar">
             <div>
@@ -995,6 +1006,56 @@
         <div class="empty-state">
           <div class="empty-state-icon">📋</div>
           <div class="empty-state-text">No version history yet.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== FEEDBACK & SUPPORT MODAL ====== -->
+  <div class="modal-overlay" id="feedbackModal">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="modal-title" id="feedbackModalTitle">Feedback & Support</span>
+        <button class="modal-close" id="feedbackModalClose">✕</button>
+      </div>
+      <div class="modal-body" id="feedbackModalBody">
+        <div id="feedbackOptionsView">
+          <p style="font-size:12px;color:#94a3b8;margin-bottom:14px;">How would you like to share your thoughts or reach out?</p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button class="btn btn-secondary btn-full" id="btnFeedbackQuickRating" style="justify-content:flex-start;text-align:left;padding:12px;">
+              <span style="font-size:18px;">⭐</span>
+              <div>
+                <div style="font-weight:600;color:#e2e8f0;">Quick Rating</div>
+                <div style="font-size:11px;color:#64748b;">Rate your experience in 10 seconds</div>
+              </div>
+            </button>
+            <button class="btn btn-secondary btn-full" id="btnFeedbackContactSupport" style="justify-content:flex-start;text-align:left;padding:12px;">
+              <span style="font-size:18px;">✉️</span>
+              <div>
+                <div style="font-weight:600;color:#e2e8f0;">Contact Support (Gmail)</div>
+                <div style="font-size:11px;color:#64748b;">Email our support team directly via Gmail</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div id="feedbackRatingView" style="display:none;">
+          <p style="font-size:12px;color:#94a3b8;margin-bottom:12px;">How well is Capsule Infinity working for you?</p>
+          <div style="display:flex;justify-content:center;gap:8px;font-size:26px;cursor:pointer;margin-bottom:14px;" id="sidebarStarRating">
+            <span class="sidebar-star" data-val="1" style="color:#475569;transition:color 0.15s;">★</span>
+            <span class="sidebar-star" data-val="2" style="color:#475569;transition:color 0.15s;">★</span>
+            <span class="sidebar-star" data-val="3" style="color:#475569;transition:color 0.15s;">★</span>
+            <span class="sidebar-star" data-val="4" style="color:#475569;transition:color 0.15s;">★</span>
+            <span class="sidebar-star" data-val="5" style="color:#475569;transition:color 0.15s;">★</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Feedback (Optional)</label>
+            <textarea class="form-textarea" id="sidebarFeedbackReason" placeholder="What do you love or what could be improved?" style="min-height:80px;"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn btn-secondary btn-sm btn-full" id="sidebarFeedbackBack">Back</button>
+            <button class="btn btn-primary btn-sm btn-full" id="sidebarFeedbackSubmit">Submit Rating</button>
+          </div>
         </div>
       </div>
     </div>
