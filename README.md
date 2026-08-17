@@ -1,6 +1,6 @@
 # Capsule Infinity
 
-![Hero Banner](./source/assets/banners/hero_banner.jpg)
+![Hero Banner](https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/banners/hero_banner.jpg)
 
 <div align="center">
   <h3>Enhance Your Browser. Extend Your World.</h3>
@@ -31,7 +31,7 @@ Brainstorming or debugging code across different model engines (e.g. migrating a
 
 ## 🛠 Features Matrix
 
-![Feature Cards](./source/assets/banners/feature_banner.svg)
+![Feature Cards](https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/banners/feature_banner.svg)
 
 * **AI Compression Backend**: Server-side LLM engine supporting smart routing with 10s timeout failovers, without exposing provider API keys to client extensions.
 * **Narrative Capsule Format**: Structured output with clear sections (`User Intent`, `Key decisions made`, `Constraints or requirements identified`, and `Technicalities/Details`) saving 80–90% of tokens while preserving 100% of technical fidelity.
@@ -48,7 +48,7 @@ Brainstorming or debugging code across different model engines (e.g. migrating a
 
 ## ⚡ How It Works
 
-![Workflow Diagram](./source/assets/diagrams/workflow.svg)
+![Workflow Diagram](https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/diagrams/workflow.svg)
 
 1. **Capture**: Injected content scripts scrape the conversation DOM tree.
 2. **AI Compression & Deduplication**: Checks conversation fingerprint cache, then sends to the AI compression backend to extract intent, decisions, constraints, and facts.
@@ -61,7 +61,7 @@ Brainstorming or debugging code across different model engines (e.g. migrating a
 
 ### Quick Actions Popup
 
-![Popup Layout Breakdown](./source/assets/diagrams/popup_explanation.svg)
+![Popup Layout Breakdown](https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/diagrams/popup_explanation.svg)
 
 * **Stats Cards**: Instantly displays saved count metrics.
 * **Quick Actions**: Triggers injected overlays on the active tab page.
@@ -75,16 +75,16 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 <div align="center">
   <table border="0">
     <tr>
-      <td><img src="./source/assets/screenshots/Screenshot%202026-07-08%20172724.png" width="380" alt="Capsule Infinity Screenshot 1"></td>
-      <td><img src="./source/assets/screenshots/Screenshot%202026-07-08%20172813.png" width="380" alt="Capsule Infinity Screenshot 2"></td>
+      <td><img src="https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/screenshots/Screenshot%202026-07-08%20172724.png" width="380" alt="Capsule Infinity Screenshot 1"></td>
+      <td><img src="https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/screenshots/Screenshot%202026-07-08%20172813.png" width="380" alt="Capsule Infinity Screenshot 2"></td>
     </tr>
     <tr>
-      <td><img src="./source/assets/screenshots/Screenshot%202026-07-08%20172909.png" width="380" alt="Capsule Infinity Screenshot 3"></td>
-      <td><img src="./source/assets/screenshots/Screenshot%202026-07-08%20172930.png" width="380" alt="Capsule Infinity Screenshot 4"></td>
+      <td><img src="https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/screenshots/Screenshot%202026-07-08%20172909.png" width="380" alt="Capsule Infinity Screenshot 3"></td>
+      <td><img src="https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/screenshots/Screenshot%202026-07-08%20172930.png" width="380" alt="Capsule Infinity Screenshot 4"></td>
     </tr>
     <tr>
-      <td><img src="./source/assets/screenshots/Screenshot%202026-07-08%20172943.png" width="380" alt="Capsule Infinity Screenshot 5"></td>
-      <td><img src="./source/assets/screenshots/Screenshot%202026-07-08%20172954.png" width="380" alt="Capsule Infinity Screenshot 6"></td>
+      <td><img src="https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/screenshots/Screenshot%202026-07-08%20172943.png" width="380" alt="Capsule Infinity Screenshot 5"></td>
+      <td><img src="https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/screenshots/Screenshot%202026-07-08%20172954.png" width="380" alt="Capsule Infinity Screenshot 6"></td>
     </tr>
   </table>
 </div>
@@ -112,7 +112,7 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 
 ## 📂 Project Architecture
 
-![Component Map](./source/assets/diagrams/component_diagram.svg)
+![Component Map](https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/diagrams/component_diagram.svg)
 
 * `manifest.json`: Configuration declarations (MV3).
 * `background.js`: Main MV3 background service worker, coordinates OAuth, token refresh, and AI compression requests.
@@ -126,7 +126,7 @@ Here are screenshots of Capsule Infinity in action showing its beautiful light a
 
 ## 🗺 Roadmap
 
-![Roadmap Timeline](./source/assets/diagrams/roadmap.svg)
+![Roadmap Timeline](https://raw.githubusercontent.com/ahmadiscoding/capsule-infinity-chrome-extension/main/source/assets/diagrams/roadmap.svg)
 
 * **Milestone 1: Core Performance (Completed)**: Scraper engine, chunked save queue, timeout guards.
 * **Milestone 2: Cloud Sync (Completed)**: Supabase sync integration, Google Account PKCE auth, local cache fallback.
