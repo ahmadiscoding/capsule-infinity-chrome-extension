@@ -3,7 +3,7 @@
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuJsRDjMLvBjJizVpbxWS9bkmTPU236bItge0ebVJ/qSfPGK+Cecw9MXbddRKCcFWcO091DtOh4wuZJtISsqxwmArkMKGgxyw1ZDkjucbG+4ZFl/qecEg4DB3jm+fFKg3kA3X1P73uHlafokromiMBEW0s0IoKKvhfIb2CnIAGbKs65WaTMoousfCFBsTO3JJ0s2SDIJU10BsE1tcJDwl0l9Aoen/17HvPP+cnwXFfnSN+E0bPc7vUpdxUdVMHeWmM5BZ9OttZLQLhc1j6pd0S7nrGhpZ5sS51qrTxfS6YoCXGCWnVGTD4LE5zLdoeatA62mWM/hwuBksQJo48GgjQQIDAQAB",
   "name": "Capsule Infinity",
   "version": "2.1.0",
-  "description": "Capture AI conversations as reusable Capsules. Drag & drop context across ChatGPT, Claude, Gemini, DeepSeek, and more. Never start from zero again.",
+  "description": "Capture AI chats as reusable Capsules. Bridge and sync context across ChatGPT, Claude, Gemini, and DeepSeek without starting from zero.",
   "permissions": [
     "storage",
     "sidePanel",
@@ -11,7 +11,6 @@
     "contextMenus",
     "unlimitedStorage",
     "identity",
-    "identity.email",
     "scripting"
   ],
   "host_permissions": [
