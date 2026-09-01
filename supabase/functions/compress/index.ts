@@ -1,8 +1,8 @@
 // ============================================
 // Supabase Edge Function: compress
 // Server-side AI transcript compression engine for Capsule Infinity
-// Resilient Multi-Provider & Multi-Model Architecture (Gemini + Groq)
-// Multi-Model Chains, Automatic Failover, Resilient JSON Extraction.
+// Fully Autonomous, Self-Healing Dynamic Model Discovery Architecture
+// Live Model Catalog Queries, Zero-Maintenance Failovers, Resilient Parsing
 // ============================================
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -10,42 +10,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") || "";
-
-// Resilient Gemini Model Chain — tries models in sequence if any are sunset/unavailable
-const GEMINI_MODELS_CHAIN: string[] = (() => {
-  const envModel = Deno.env.get("GEMINI_MODEL");
-  const models = [
-    "gemini-2.5-flash",
-    "gemini-1.5-flash",
-    "gemini-2.0-flash",
-    "gemini-3.5-flash",
-    "gemini-3.7-flash",
-    "gemini-1.5-pro"
-  ];
-  if (envModel) {
-    return [envModel, ...models.filter(m => m !== envModel)];
-  }
-  return models;
-})();
-
-// Resilient Groq Model Chain — tries models in sequence if any are sunset/unavailable
-const GROQ_MODELS_CHAIN: string[] = (() => {
-  const envModel = Deno.env.get("GROQ_MODEL");
-  const models = [
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "openai/gpt-oss-20b",
-    "openai/gpt-oss-120b",
-    "qwen/qwen3.6-27b",
-    "deepseek-r1-distill-llama-70b",
-    "gemma2-9b-it",
-    "mixtral-8x7b-32768"
-  ];
-  if (envModel) {
-    return [envModel, ...models.filter(m => m !== envModel)];
-  }
-  return models;
-})();
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
@@ -57,6 +21,150 @@ const GROQ_DAILY_CAP = 2000;
 
 // Provider call timeout — 25s gives ample headroom for cold starts and heavy transcripts
 const PROVIDER_TIMEOUT_MS = 25000;
+
+// ============================================================
+// DYNAMIC SELF-HEALING LIVE MODEL DISCOVERY ENGINE
+// Automatically queries Google & Groq live model catalogs at runtime.
+// Automatically discovers newly added models & skips sunset ones.
+// ============================================================
+
+interface ModelCache {
+  gemini: { models: string[]; lastFetched: number };
+  groq: { models: string[]; lastFetched: number };
+}
+
+const modelCache: ModelCache = {
+  gemini: { models: [], lastFetched: 0 },
+  groq: { models: [], lastFetched: 0 },
+};
+
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache
+
+// Safe static fallbacks in case network to /models fails
+const STATIC_GEMINI_FALLBACKS = [
+  "gemini-2.5-flash",
+  "gemini-1.5-flash",
+  "gemini-2.0-flash",
+  "gemini-3.5-flash",
+  "gemini-3.7-flash",
+  "gemini-1.5-pro"
+];
+
+const STATIC_GROQ_FALLBACKS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+  "openai/gpt-oss-20b",
+  "openai/gpt-oss-120b",
+  "qwen/qwen3.6-27b",
+  "deepseek-r1-distill-llama-70b",
+  "gemma2-9b-it",
+  "mixtral-8x7b-32768"
+];
+
+// Dynamically fetch live available models directly from Google AI Studio
+async function getLiveGeminiModels(): Promise<string[]> {
+  const now = Date.now();
+  if (modelCache.gemini.models.length > 0 && (now - modelCache.gemini.lastFetched < CACHE_TTL_MS)) {
+    return modelCache.gemini.models;
+  }
+
+  if (!GEMINI_API_KEY) return STATIC_GEMINI_FALLBACKS;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`, {
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeout));
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.models)) {
+        const discovered = data.models
+          .filter((m: any) => {
+            const name = (m.name || "").replace("models/", "");
+            const methods = m.supportedGenerationMethods || [];
+            const isText = methods.includes("generateContent");
+            const isEmbedding = name.includes("embedding") || name.includes("aqa") || name.includes("transcribe");
+            return isText && !isEmbedding;
+          })
+          .map((m: any) => (m.name || "").replace("models/", ""))
+          .filter(Boolean);
+
+        if (discovered.length > 0) {
+          // Sort flash models first for maximum speed and token efficiency
+          discovered.sort((a: string, b: string) => {
+            const aFlash = a.includes("flash") ? 1 : 0;
+            const bFlash = b.includes("flash") ? 1 : 0;
+            return bFlash - aFlash;
+          });
+
+          console.log(`🌌 [Live Model Discovery] Found ${discovered.length} active Gemini models:`, discovered.slice(0, 5).join(", "));
+          modelCache.gemini.models = discovered;
+          modelCache.gemini.lastFetched = now;
+          return discovered;
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[Live Model Discovery] Gemini models query failed (${e.message}), using fallback list.`);
+  }
+
+  return STATIC_GEMINI_FALLBACKS;
+}
+
+// Dynamically fetch live available models directly from GroqCloud API
+async function getLiveGroqModels(): Promise<string[]> {
+  const now = Date.now();
+  if (modelCache.groq.models.length > 0 && (now - modelCache.groq.lastFetched < CACHE_TTL_MS)) {
+    return modelCache.groq.models;
+  }
+
+  if (!GROQ_API_KEY) return STATIC_GROQ_FALLBACKS;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch("https://api.groq.com/openai/v1/models", {
+      headers: {
+        "Authorization": `Bearer ${GROQ_API_KEY}`
+      },
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeout));
+
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.data)) {
+        const discovered = data.data
+          .filter((m: any) => {
+            const id = m.id || "";
+            const isAudio = id.includes("whisper") || id.includes("guard");
+            return m.active !== false && !isAudio;
+          })
+          .map((m: any) => m.id)
+          .filter(Boolean);
+
+        if (discovered.length > 0) {
+          // Prioritize versatile and instant models
+          discovered.sort((a: string, b: string) => {
+            const aScore = a.includes("instant") || a.includes("versatile") ? 2 : (a.includes("gpt-oss") ? 1 : 0);
+            const bScore = b.includes("instant") || b.includes("versatile") ? 2 : (b.includes("gpt-oss") ? 1 : 0);
+            return bScore - aScore;
+          });
+
+          console.log(`🎰 [Live Model Discovery] Found ${discovered.length} active Groq models:`, discovered.slice(0, 5).join(", "));
+          modelCache.groq.models = discovered;
+          modelCache.groq.lastFetched = now;
+          return discovered;
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn(`[Live Model Discovery] Groq models query failed (${e.message}), using fallback list.`);
+  }
+
+  return STATIC_GROQ_FALLBACKS;
+}
 
 const SYSTEM_PROMPT = `You are the compression engine for a context-capsule browser extension. You will receive a raw AI chat transcript. Produce a compact "capsule" that lets another AI instantly resume this conversation with full context.
 
@@ -159,24 +267,25 @@ async function callGeminiWithModel(transcript: string, model: string): Promise<a
   }
 }
 
-// Call Gemini iterating through its model chain
+// Call Gemini iterating dynamically through its live model catalog
 async function callGemini(transcript: string): Promise<{ capsule: any; modelUsed: string }> {
   if (!GEMINI_API_KEY) throw new Error("Gemini API key not configured");
 
+  const models = await getLiveGeminiModels();
   let lastError: any = null;
-  for (let i = 0; i < GEMINI_MODELS_CHAIN.length; i++) {
-    const model = GEMINI_MODELS_CHAIN[i];
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
     try {
-      console.log(`🌌 [Gemini] Calling model "${model}"... (${i + 1}/${GEMINI_MODELS_CHAIN.length})`);
+      console.log(`🌌 [Gemini] Calling live model "${model}"... (${i + 1}/${models.length})`);
       const capsule = await callGeminiWithModel(transcript, model);
       console.log(`✨ [Gemini] Model "${model}" completed compression successfully!`);
       return { capsule, modelUsed: model };
     } catch (err: any) {
       lastError = err;
-      console.warn(`⚠️ [Gemini] Model "${model}" failed (${err.message}). Trying next Gemini model in chain...`);
+      console.warn(`⚠️ [Gemini] Model "${model}" failed (${err.message}). Trying next discovered model...`);
     }
   }
-  throw lastError || new Error("All Gemini models in chain exhausted");
+  throw lastError || new Error("All live Gemini models in chain exhausted");
 }
 
 // Call a single Groq model with AbortController timeout
@@ -221,24 +330,25 @@ async function callGroqWithModel(transcript: string, model: string): Promise<any
   }
 }
 
-// Call Groq iterating through its model chain
+// Call Groq iterating dynamically through its live model catalog
 async function callGroq(transcript: string): Promise<{ capsule: any; modelUsed: string }> {
   if (!GROQ_API_KEY) throw new Error("Groq API key not configured");
 
+  const models = await getLiveGroqModels();
   let lastError: any = null;
-  for (let i = 0; i < GROQ_MODELS_CHAIN.length; i++) {
-    const model = GROQ_MODELS_CHAIN[i];
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
     try {
-      console.log(`🎰 [Groq] Calling model "${model}"... (${i + 1}/${GROQ_MODELS_CHAIN.length})`);
+      console.log(`🎰 [Groq] Calling live model "${model}"... (${i + 1}/${models.length})`);
       const capsule = await callGroqWithModel(transcript, model);
       console.log(`✅ [Groq] Model "${model}" delivered compression successfully!`);
       return { capsule, modelUsed: model };
     } catch (err: any) {
       lastError = err;
-      console.warn(`⚠️ [Groq] Model "${model}" failed (${err.message}). Trying next Groq model in chain...`);
+      console.warn(`⚠️ [Groq] Model "${model}" failed (${err.message}). Trying next discovered model...`);
     }
   }
-  throw lastError || new Error("All Groq models in chain exhausted");
+  throw lastError || new Error("All live Groq models in chain exhausted");
 }
 
 // In-memory per-user burst rate-limiter (3-second guard to prevent automated DoS spam)
@@ -369,7 +479,7 @@ serve(async (req: Request) => {
         recordDailyUsage("groq");
       }
     } catch (primaryErr: any) {
-      console.warn(`💥 [Router] Primary provider (${preferredProvider}) failed all models in chain: ${primaryErr.message}`);
+      console.warn(`💥 [Router] Primary provider (${preferredProvider}) failed all models: ${primaryErr.message}`);
     }
 
     // Step B: Try Alternative Provider Chain if primary failed
