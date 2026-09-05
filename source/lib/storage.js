@@ -89,11 +89,27 @@ const CapsuleStorage = {
   async getAllCapsules() {
     const sb = await this.initSupabase();
     const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
-    const user = stored.user;
 
-    if (sb && (stored.authToken || stored.supabaseSession || user?.id)) {
+    if (sb && (stored.authToken || stored.supabaseSession || stored.user)) {
       try {
-        const userId = user?.id;
+        let userId = null;
+        const session = await SupabaseClient.getSession();
+        if (session?.user?.id) {
+          userId = session.user.id;
+        } else {
+          const u = await SupabaseClient.getUser();
+          if (u?.id) userId = u.id;
+        }
+        if (!userId && stored.user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stored.user.id)) {
+          userId = stored.user.id;
+        }
+
+        // Auto-heal local storage user ID if it was holding an old string
+        if (userId && stored.user && stored.user.id !== userId) {
+          stored.user.id = userId;
+          await chrome.storage.local.set({ user: stored.user });
+        }
+
         let data = null;
         let error = null;
 
@@ -105,16 +121,6 @@ const CapsuleStorage = {
           const res = await sb.from('capsules').select('*').order('created_at', { ascending: false });
           data = res.data;
           error = res.error;
-        }
-
-        // If direct select failed, try RPC fallback
-        if (error && userId) {
-          console.log('[Storage] Direct fetch failed, trying get_user_capsules_atomic RPC...');
-          const rpcRes = await sb.rpc('get_user_capsules_atomic', { p_user_id: userId });
-          if (!rpcRes.error && rpcRes.data) {
-            data = rpcRes.data;
-            error = null;
-          }
         }
 
         if (error) throw error;
@@ -224,62 +230,54 @@ const CapsuleStorage = {
 
     const sb = await this.initSupabase();
     const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
-    const user = stored.user;
 
-    if (sb && (stored.authToken || stored.supabaseSession || user?.id)) {
+    if (sb && (stored.authToken || stored.supabaseSession || stored.user)) {
       try {
-        const userId = user?.id || 'anonymous_user';
-
-        const serializedContent = JSON.stringify({
-          content: capsule.content || '',
-          platform: capsule.platform || 'unknown',
-          sourceUrl: capsule.sourceUrl || '',
-          folderId: capsule.folderId || 'default',
-          tags: capsule.tags || [],
-          messageCount: capsule.messageCount || 1,
-          savingsPercent: capsule.savingsPercent || 0,
-          rawTokens: capsule.rawTokens || 0,
-          compressedTokens: capsule.compressedTokens || 0,
-          updatedAt: capsule.metadata.updatedAt,
-          version: capsule.metadata.version,
-          versionHistory: capsule.metadata.versionHistory || []
-        });
-
-        const dbObj = {
-          id: uuid,
-          user_id: userId,
-          title: capsule.title || 'Untitled',
-          content: serializedContent
-        };
-
-        // 1. Try standard upsert
-        let saveSuccess = false;
-        const { data, error: insertError } = await sb.from('capsules').upsert(dbObj).select();
-        
-        if (!insertError && data?.[0]) {
-          saveSuccess = true;
-          capsule.id = data[0].id;
-          if (data[0].created_at) {
-            capsule.metadata.createdAt = new Date(data[0].created_at).getTime();
-          }
+        let userId = null;
+        const session = await SupabaseClient.getSession();
+        if (session?.user?.id) {
+          userId = session.user.id;
         } else {
-          // 2. Fallback to atomic SECURITY DEFINER RPC
-          console.log('[Storage] Direct upsert notice, executing save_capsule_atomic RPC fallback...');
-          const { data: rpcData, error: rpcError } = await sb.rpc('save_capsule_atomic', {
-            p_id: uuid,
-            p_user_id: userId,
-            p_title: dbObj.title,
-            p_content: dbObj.content
+          const u = await SupabaseClient.getUser();
+          if (u?.id) userId = u.id;
+        }
+        if (!userId && stored.user?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(stored.user.id)) {
+          userId = stored.user.id;
+        }
+
+        if (userId) {
+          const serializedContent = JSON.stringify({
+            content: capsule.content || '',
+            platform: capsule.platform || 'unknown',
+            sourceUrl: capsule.sourceUrl || '',
+            folderId: capsule.folderId || 'default',
+            tags: capsule.tags || [],
+            messageCount: capsule.messageCount || 1,
+            savingsPercent: capsule.savingsPercent || 0,
+            rawTokens: capsule.rawTokens || 0,
+            compressedTokens: capsule.compressedTokens || 0,
+            updatedAt: capsule.metadata.updatedAt,
+            version: capsule.metadata.version,
+            versionHistory: capsule.metadata.versionHistory || []
           });
-          if (!rpcError) {
-            saveSuccess = true;
-            console.log('[Storage] save_capsule_atomic RPC succeeded!');
-          } else {
-            console.warn('[Storage] Both direct upsert and RPC save returned notes:', insertError?.message, rpcError.message);
+
+          const dbObj = {
+            id: uuid,
+            user_id: userId,
+            title: capsule.title || 'Untitled',
+            content: serializedContent
+          };
+
+          const { data, error: insertError } = await sb.from('capsules').upsert(dbObj).select();
+          if (insertError) {
+            console.error('[Storage] Supabase Save Notice:', insertError.message);
+          } else if (data?.[0]?.created_at) {
+            capsule.id = data[0].id;
+            capsule.metadata.createdAt = new Date(data[0].created_at).getTime();
           }
         }
       } catch (e) {
-        console.error('[Storage] Supabase save capsule failed:', e.message || e.details || JSON.stringify(e));
+        console.error('[Storage] Supabase save capsule error:', e.message || e);
       }
     }
 
