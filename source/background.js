@@ -183,121 +183,99 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         try {
           const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'googleClientId']);
+          const clientId = res.googleClientId || "328828088778-k9g6656bjtih0mhjckqrqa78gooimu83.apps.googleusercontent.com";
+          const redirectUrl = chrome.identity.getRedirectURL(); // e.g. https://<extension-id>.chromiumapp.org/
 
           let token = null;
           let refreshToken = null;
+          let session = null;
           let userObj = null;
 
           const sb = await SupabaseClient.ensureInitialized();
-          if (sb) {
-            const redirectUrl = chrome.identity.getRedirectURL(); // e.g. https://<extension-id>.chromiumapp.org/
 
-            // 1. Initiate Supabase PKCE OAuth to get the authorization URL
-            const { data: oauthData, error: oauthErr } = await sb.auth.signInWithOAuth({
-              provider: 'google',
-              options: {
-                redirectTo: redirectUrl,
-                skipBrowserRedirect: true,
-                queryParams: {
-                  prompt: 'select_account'
+          // Strategy 1: Supabase Hosted OAuth with PKCE
+          let oauthSuccess = false;
+          if (sb) {
+            try {
+              const { data: oauthData, error: oauthErr } = await sb.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                  redirectTo: redirectUrl,
+                  skipBrowserRedirect: true,
+                  queryParams: {
+                    prompt: 'select_account'
+                  }
+                }
+              });
+
+              if (!oauthErr && oauthData?.url) {
+                console.log('[Background OAuth] Attempting Supabase PKCE flow with URL:', oauthData.url);
+                const responseUrl = await new Promise((resolve, reject) => {
+                  chrome.identity.launchWebAuthFlow({
+                    url: oauthData.url,
+                    interactive: true
+                  }, (url) => {
+                    if (chrome.runtime.lastError) {
+                      reject(new Error(chrome.runtime.lastError.message));
+                    } else if (!url) {
+                      reject(new Error("Authorization flow was cancelled or closed."));
+                    } else {
+                      resolve(url);
+                    }
+                  });
+                });
+
+                if (responseUrl) {
+                  const parsedUrl = new URL(responseUrl);
+                  const code = parsedUrl.searchParams.get("code") || (parsedUrl.hash ? new URLSearchParams(parsedUrl.hash.substring(1)).get("code") : null);
+                  const hashParams = parsedUrl.hash ? new URLSearchParams(parsedUrl.hash.substring(1)) : null;
+                  const accessToken = hashParams?.get("access_token") || parsedUrl.searchParams.get("access_token");
+                  const refreshTok = hashParams?.get("refresh_token") || parsedUrl.searchParams.get("refresh_token");
+
+                  if (code) {
+                    const { data: sessionData, error: sessionErr } = await sb.auth.exchangeCodeForSession(code);
+                    if (!sessionErr && sessionData?.session) {
+                      session = sessionData.session;
+                      token = session.access_token;
+                      refreshToken = session.refresh_token;
+                      oauthSuccess = true;
+                    }
+                  } else if (accessToken) {
+                    const { data: sessionData, error: setSessionError } = await sb.auth.setSession({
+                      access_token: accessToken,
+                      refresh_token: refreshTok || ''
+                    });
+                    if (!setSessionError) {
+                      session = sessionData?.session || { access_token: accessToken, refresh_token: refreshTok };
+                      token = session.access_token;
+                      refreshToken = session.refresh_token;
+                      oauthSuccess = true;
+                    }
+                  }
                 }
               }
-            });
-
-            if (oauthErr || !oauthData?.url) {
-              throw new Error(oauthErr?.message || 'Failed to initiate Supabase Google OAuth');
+            } catch (supabaseOAuthErr) {
+              console.warn('[Background OAuth] Supabase OAuth URL failed, falling back to Direct Google OAuth:', supabaseOAuthErr.message || supabaseOAuthErr);
             }
+          }
 
-            const authUrl = oauthData.url;
-            console.log('[Background OAuth] Launching WebAuthFlow with URL:', authUrl);
+          // Strategy 2: Direct Google OAuth + Supabase signInWithIdToken
+          if (!oauthSuccess) {
+            console.log('[Background OAuth] Launching Direct Google OAuth flow...');
+            const nonce = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+            const scopes = encodeURIComponent("openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile");
 
-            // 2. Launch Chrome Identity Web Auth Flow
-            let responseUrl = null;
-            try {
-              responseUrl = await new Promise((resolve, reject) => {
-                chrome.identity.launchWebAuthFlow({
-                  url: authUrl,
-                  interactive: true
-                }, (url) => {
-                  if (chrome.runtime.lastError) {
-                    reject(new Error(chrome.runtime.lastError.message));
-                  } else if (!url) {
-                    reject(new Error("Authorization flow was cancelled or closed."));
-                  } else {
-                    resolve(url);
-                  }
-                });
-              });
-            } catch (authFlowErr) {
-              console.error('[Background OAuth] launchWebAuthFlow error:', authFlowErr.message || authFlowErr);
-              throw authFlowErr;
-            }
-
-            if (!responseUrl) throw new Error('No redirect URL returned from authentication provider.');
-
-            // 3. Extract authorization code or tokens from callback URL
-            const parsedUrl = new URL(responseUrl);
-            const code = parsedUrl.searchParams.get("code") || (parsedUrl.hash ? new URLSearchParams(parsedUrl.hash.substring(1)).get("code") : null);
-            const hashParams = parsedUrl.hash ? new URLSearchParams(parsedUrl.hash.substring(1)) : null;
-            const accessToken = hashParams?.get("access_token") || parsedUrl.searchParams.get("access_token");
-            const refreshTok = hashParams?.get("refresh_token") || parsedUrl.searchParams.get("refresh_token");
-
-            let session = null;
-            if (code) {
-              // Exchange PKCE authorization code for session
-              const { data: sessionData, error: sessionErr } = await sb.auth.exchangeCodeForSession(code);
-              if (sessionErr) throw sessionErr;
-              session = sessionData?.session;
-            } else if (accessToken) {
-              // Fallback to direct token set if implicit grant is returned
-              const { data: sessionData, error: setSessionError } = await sb.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshTok || ''
-              });
-              if (setSessionError) throw setSessionError;
-              session = sessionData?.session || { access_token: accessToken, refresh_token: refreshTok };
-            } else {
-              const errDesc = parsedUrl.searchParams.get("error_description") || hashParams?.get("error_description") || parsedUrl.searchParams.get("error");
-              throw new Error(errDesc || "No authorization code or access token found in redirect response.");
-            }
-
-            token = session?.access_token || accessToken;
-            refreshToken = session?.refresh_token || refreshTok;
-
-            // 4. Retrieve authenticated user profile
-            const { data: { user }, error: userErr } = await sb.auth.getUser();
-            if (userErr || !user) throw new Error('Failed to retrieve user profile from Supabase');
-
-            userObj = {
-              id: user.id,
-              email: user.email,
-              name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0],
-              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
-              createdAt: Date.now()
-            };
-
-            await chrome.storage.local.set({
-              authToken: token,
-              supabaseSession: session,
-              user: userObj,
-              googleAuth: true
-            });
-          } else {
-            // Standalone Google OAuth Fallback
-            const clientId = res.googleClientId || "328828088778-k9g6656bjtih0mhjckqrqa78gooimu83.apps.googleusercontent.com";
-            const redirectUrl = chrome.identity.getRedirectURL();
-            const scopes = encodeURIComponent("https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile");
-
-            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
-                            `?client_id=${clientId}` +
-                            `&response_type=token` +
-                            `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
-                            `&scope=${scopes}` +
-                            `&prompt=select_account`;
+            const directAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
+                                  `?client_id=${clientId}` +
+                                  `&response_type=token%20id_token` +
+                                  `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
+                                  `&scope=${scopes}` +
+                                  `&nonce=${nonce}` +
+                                  `&prompt=select_account`;
 
             const responseUrl = await new Promise((resolve, reject) => {
               chrome.identity.launchWebAuthFlow({
-                url: authUrl,
+                url: directAuthUrl,
                 interactive: true
               }, (url) => {
                 if (chrome.runtime.lastError) {
@@ -310,32 +288,88 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               });
             });
 
-            if (!responseUrl) throw new Error('No redirect URL returned');
+            if (!responseUrl) throw new Error('No redirect URL returned from Google OAuth.');
 
             const parsedUrl = new URL(responseUrl);
-            const params = new URLSearchParams(parsedUrl.hash.substring(1));
-            token = params.get("access_token");
+            const hashParams = parsedUrl.hash ? new URLSearchParams(parsedUrl.hash.substring(1)) : null;
+            const googleAccessToken = hashParams?.get("access_token") || parsedUrl.searchParams.get("access_token");
+            const googleIdToken = hashParams?.get("id_token") || parsedUrl.searchParams.get("id_token");
 
-            if (!token) throw new Error('No access token found in redirect URL');
+            if (!googleAccessToken && !googleIdToken) {
+              const errDesc = parsedUrl.searchParams.get("error_description") || hashParams?.get("error_description") || parsedUrl.searchParams.get("error");
+              throw new Error(errDesc || 'No access token or ID token returned from Google');
+            }
 
-            const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Failed to retrieve user profile from Google');
-            const profile = await response.json();
+            token = googleAccessToken || googleIdToken;
 
-            const email = profile.email;
-            const name = profile.name || email.split('@')[0];
+            // Attempt to link to Supabase via signInWithIdToken
+            if (sb && googleIdToken) {
+              try {
+                const { data: idTokenData, error: idTokenErr } = await sb.auth.signInWithIdToken({
+                  provider: 'google',
+                  token: googleIdToken,
+                  access_token: googleAccessToken || undefined,
+                  nonce: nonce
+                });
+                if (!idTokenErr && idTokenData?.session) {
+                  session = idTokenData.session;
+                  token = session.access_token;
+                  refreshToken = session.refresh_token;
+                }
+              } catch (e) {
+                console.warn('[Background OAuth] signInWithIdToken fallback error:', e.message || e);
+              }
+            }
 
-            const id = 'g_' + email.replace(/[^a-zA-Z0-9]/g, '_');
-            userObj = { id, email, name, avatar: profile.picture || null, createdAt: Date.now() };
-
-            await chrome.storage.local.set({
-              authToken: token,
-              user: userObj,
-              googleAuth: true
-            });
+            // If we have Google access token, fetch Google user profile
+            if (googleAccessToken) {
+              try {
+                const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                  headers: { Authorization: `Bearer ${googleAccessToken}` }
+                });
+                if (profileRes.ok) {
+                  const profile = await profileRes.json();
+                  const email = profile.email;
+                  const name = profile.name || email?.split('@')[0] || 'User';
+                  const id = session?.user?.id || ('g_' + (email ? email.replace(/[^a-zA-Z0-9]/g, '_') : 'user'));
+                  userObj = { id, email, name, avatar: profile.picture || null, createdAt: Date.now() };
+                }
+              } catch (e) {
+                console.warn('[Background OAuth] Google userinfo fetch failed:', e.message || e);
+              }
+            }
           }
+
+          // If session user exists in Supabase, use Supabase profile
+          if (sb && session) {
+            try {
+              const { data: { user } } = await sb.auth.getUser();
+              if (user) {
+                userObj = {
+                  id: user.id,
+                  email: user.email,
+                  name: user.user_metadata?.full_name || user.user_metadata?.name || userObj?.name || user.email?.split('@')[0] || 'User',
+                  avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || userObj?.avatar || null,
+                  createdAt: Date.now()
+                };
+              }
+            } catch {}
+          }
+
+          if (!userObj && !token) {
+            throw new Error("Unable to complete Google Sign-in. Please try again.");
+          }
+
+          if (!userObj) {
+            userObj = { id: 'user_' + Date.now(), email: 'user@example.com', name: 'User', createdAt: Date.now() };
+          }
+
+          await chrome.storage.local.set({
+            authToken: token,
+            supabaseSession: session || null,
+            user: userObj,
+            googleAuth: true
+          });
 
           // Broadcast AUTH_SUCCESS to popup and sidebar
           chrome.runtime.sendMessage({
