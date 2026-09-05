@@ -96,19 +96,14 @@ console.warn = function(...args) {
   async function loadDashboardData() {
     try {
       // Load capsules
-      let capsules = null;
-      const settings = await chrome.storage.local.get(['supabaseUrl']);
-      if (settings.supabaseUrl) {
+      let capsules = [];
+      try {
         const allCapsules = await Storage.getAllCapsules();
         capsules = Array.isArray(allCapsules) ? allCapsules : [];
-      } else {
-        if (API) {
-          try { capsules = await API.getCapsules({ sortBy: 'recent' }); if (capsules) capsules = capsules.capsules || capsules; } catch {}
-        }
-        if (!capsules) {
-          const allCapsules = await Storage.getAllCapsules();
-          capsules = Array.isArray(allCapsules) ? allCapsules : [];
-        }
+      } catch (err) {
+        console.warn('[Popup] Storage.getAllCapsules fallback:', err);
+        const res = await chrome.storage.local.get('capsules');
+        capsules = res.capsules || [];
       }
       capsules = capsules || [];
 

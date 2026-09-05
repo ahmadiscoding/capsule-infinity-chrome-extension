@@ -5,7 +5,7 @@
 // ============================================
 
 const DEFAULT_SUPABASE_URL = 'https://saqruqtjjinuslcxryuc.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
+const DEFAULT_SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhcXJ1cXRqamludXNsY3hyeXVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0Mjc5NDUsImV4cCI6MjA5OTAwMzk0NX0.WEWyemWnF_Lz2_Joy0VoYQJCR1QkG0oAqLbRVgdmY6w';
 
 // Session expiry safety margin: refresh if token expires within this many seconds
 const SESSION_EXPIRY_MARGIN_SECONDS = 120;
@@ -44,7 +44,12 @@ const SupabaseClient = {
   async getConfig() {
     const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
     const url = (res.supabaseUrl || DEFAULT_SUPABASE_URL).trim().replace(/\/+$/, '');
-    const key = res.supabaseKey || DEFAULT_SUPABASE_KEY;
+    let key = res.supabaseKey || DEFAULT_SUPABASE_KEY;
+    // Auto-migrate legacy/invalid keys or publishable keys to standard JWT anon key
+    if (key.startsWith('sb_publishable_') || !key.startsWith('eyJ')) {
+      key = DEFAULT_SUPABASE_KEY;
+      await chrome.storage.local.set({ supabaseKey: key });
+    }
     return { url, key, session: res.supabaseSession };
   },
 

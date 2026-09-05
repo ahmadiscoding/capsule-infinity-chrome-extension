@@ -2185,21 +2185,12 @@
       }
 
       try {
-        if (typeof SupabaseClient !== 'undefined') {
-          const client = await SupabaseClient.ensureInitialized();
-          const user = await SupabaseClient.getUser();
-          if (client) {
-            const insertPayload = {
-              rating: selectedRating,
-              reason: reason || null,
-              user_id: user?.id || null
-            };
-            if (isFollowUp) {
-              insertPayload.follow_up = true;
-            }
-            await client.from('user_feedback').insert(insertPayload);
-          }
-        }
+        chrome.runtime.sendMessage({
+          type: 'SUBMIT_FEEDBACK',
+          rating: selectedRating,
+          reason: reason || null,
+          followUp: !!isFollowUp
+        });
         showToast('Thank you for your feedback!', 'success');
 
         if (!isFollowUp) {

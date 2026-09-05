@@ -435,21 +435,12 @@ console.warn = function(...args) {
 
   async function loadCapsules() {
     try {
-      let data = null;
-      const settings = await chrome.storage.local.get(['supabaseUrl']);
-      if (settings.supabaseUrl) {
-        data = await Storage.getAllCapsules();
-      } else {
-        if (API) {
-          try { data = await API.getCapsules(); if (data) data = data.capsules || data; } catch {}
-        }
-        if (!data) {
-          data = await Storage.getAllCapsules();
-        }
-      }
+      const data = await Storage.getAllCapsules();
       state.capsules = Array.isArray(data) ? data : [];
-    } catch {
-      state.capsules = [];
+    } catch (err) {
+      console.warn('[Sidebar] Storage.getAllCapsules fallback:', err);
+      const res = await chrome.storage.local.get('capsules');
+      state.capsules = res.capsules || [];
     }
   }
 
@@ -1659,17 +1650,12 @@ console.warn = function(...args) {
     }
     const reason = $('#sidebarFeedbackReason').value.trim();
     try {
-      if (typeof SupabaseClient !== 'undefined') {
-        const client = await SupabaseClient.ensureInitialized();
-        const user = await SupabaseClient.getUser();
-        if (client) {
-          await client.from('user_feedback').insert({
-            rating: sidebarSelectedRating,
-            reason: reason || null,
-            user_id: user?.id || null
-          });
-        }
-      }
+      chrome.runtime.sendMessage({
+        type: 'SUBMIT_FEEDBACK',
+        rating: sidebarSelectedRating,
+        reason: reason || null,
+        followUp: false
+      });
       showToast('Thank you for your feedback!', 'success');
       $('#feedbackModal').classList.remove('open');
     } catch (e) {

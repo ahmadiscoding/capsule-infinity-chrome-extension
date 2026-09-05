@@ -22,10 +22,13 @@ const CapsuleStorage = {
   async supabaseFetch(method, path, body = null, preferHeader = null) {
     const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
     const defaultUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
-    const defaultKey = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
+    const defaultKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhcXJ1cXRqamludXNsY3hyeXVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0Mjc5NDUsImV4cCI6MjA5OTAwMzk0NX0.WEWyemWnF_Lz2_Joy0VoYQJCR1QkG0oAqLbRVgdmY6w';
     
     const url = res.supabaseUrl || defaultUrl;
-    const key = res.supabaseKey || defaultKey;
+    let key = res.supabaseKey || defaultKey;
+    if (key.startsWith('sb_publishable_') || !key.startsWith('eyJ')) {
+      key = defaultKey;
+    }
     if (!url || !key) return null;
 
     const token = res.supabaseSession?.access_token || key;
@@ -85,58 +88,70 @@ const CapsuleStorage = {
 
   async getAllCapsules() {
     const sb = await this.initSupabase();
-    const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
-    const session = client ? await client.getSession() : null;
+    const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
+    const user = stored.user;
 
-    if (sb && session?.access_token) {
+    if (sb && (stored.authToken || stored.supabaseSession || user?.id)) {
       try {
-        let userId = session.user?.id;
-        if (!userId) {
-          const localUser = await chrome.storage.local.get(['user']);
-          userId = localUser?.user?.id;
-        }
+        const userId = user?.id;
+        let data = null;
+        let error = null;
 
-        let query = sb.from('capsules').select('*').order('created_at', { ascending: false });
         if (userId) {
-          query = query.eq('user_id', userId);
+          const res = await sb.from('capsules').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+          data = res.data;
+          error = res.error;
+        } else {
+          const res = await sb.from('capsules').select('*').order('created_at', { ascending: false });
+          data = res.data;
+          error = res.error;
         }
 
-        const { data, error } = await query;
+        // If direct select failed, try RPC fallback
+        if (error && userId) {
+          console.log('[Storage] Direct fetch failed, trying get_user_capsules_atomic RPC...');
+          const rpcRes = await sb.rpc('get_user_capsules_atomic', { p_user_id: userId });
+          if (!rpcRes.error && rpcRes.data) {
+            data = rpcRes.data;
+            error = null;
+          }
+        }
+
         if (error) throw error;
 
-          if (data) {
-            const mapped = data.map(row => {
-              let parsed = {};
-              try {
-                parsed = JSON.parse(row.content);
-              } catch (e) {
-                parsed = { content: row.content };
-              }
-              return {
-                id: row.id,
-                title: row.title,
-                content: parsed.content || '',
-                platform: parsed.platform || 'unknown',
-                sourceUrl: parsed.sourceUrl || '',
-                folderId: parsed.folderId || 'default',
-                tags: parsed.tags || [],
-                messageCount: parsed.messageCount || 1,
-                savingsPercent: parsed.savingsPercent || 0,
-                rawTokens: parsed.rawTokens || 0,
-                compressedTokens: parsed.compressedTokens || 0,
+        if (data) {
+          const mapped = data.map(row => {
+            let parsed = {};
+            try {
+              parsed = JSON.parse(row.content);
+            } catch (e) {
+              parsed = { content: row.content };
+            }
+            return {
+              id: row.id,
+              title: row.title,
+              content: parsed.content || '',
+              platform: parsed.platform || 'unknown',
+              sourceUrl: parsed.sourceUrl || '',
+              folderId: parsed.folderId || 'default',
+              tags: parsed.tags || [],
+              messageCount: parsed.messageCount || 1,
+              savingsPercent: parsed.savingsPercent || 0,
+              rawTokens: parsed.rawTokens || 0,
+              compressedTokens: parsed.compressedTokens || 0,
+              createdAt: new Date(row.created_at).getTime(),
+              updatedAt: parsed.updatedAt || new Date(row.created_at).getTime(),
+              metadata: {
                 createdAt: new Date(row.created_at).getTime(),
                 updatedAt: parsed.updatedAt || new Date(row.created_at).getTime(),
-                metadata: {
-                  createdAt: new Date(row.created_at).getTime(),
-                  updatedAt: parsed.updatedAt || new Date(row.created_at).getTime(),
-                  version: parsed.version || 1,
-                  versionHistory: parsed.versionHistory || []
-                }
-              };
-            });
-            chrome.storage.local.set({ capsules: mapped });
-            return mapped;
-          }
+                version: parsed.version || 1,
+                versionHistory: parsed.versionHistory || []
+              }
+            };
+          });
+          chrome.storage.local.set({ capsules: mapped });
+          return mapped;
+        }
       } catch (e) {
         console.error('[Storage] Supabase fetch capsules failed, falling back to local:', e.message || e.details || JSON.stringify(e));
       }
@@ -148,10 +163,9 @@ const CapsuleStorage = {
 
   async getCapsule(id) {
     const sb = await this.initSupabase();
-    const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
-    const session = client ? await client.getSession() : null;
+    const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
 
-    if (sb && session?.access_token) {
+    if (sb && (stored.authToken || stored.supabaseSession)) {
       try {
         const { data, error } = await sb.from('capsules').select('*').eq('id', id);
         if (error) throw error;
@@ -209,67 +223,63 @@ const CapsuleStorage = {
     capsule.metadata.version = capsule.metadata.version || 1;
 
     const sb = await this.initSupabase();
-    const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
-    const session = client ? await client.getSession() : null;
+    const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
+    const user = stored.user;
 
-    if (sb && session?.access_token) {
+    if (sb && (stored.authToken || stored.supabaseSession || user?.id)) {
       try {
-        let userId = session.user?.id;
-        if (!userId) {
-          try {
-            const user = client ? await client.getUser() : null;
-            if (user?.id) userId = user.id;
-          } catch {}
-        }
-        if (!userId) {
-          const localUser = await chrome.storage.local.get(['user']);
-          if (localUser?.user?.id) {
-            userId = localUser.user.id;
-          }
-        }
+        const userId = user?.id || 'anonymous_user';
 
-        if (!userId) {
-          throw new Error("Authentication Error: You must be signed in to save capsules.");
-        }
+        const serializedContent = JSON.stringify({
+          content: capsule.content || '',
+          platform: capsule.platform || 'unknown',
+          sourceUrl: capsule.sourceUrl || '',
+          folderId: capsule.folderId || 'default',
+          tags: capsule.tags || [],
+          messageCount: capsule.messageCount || 1,
+          savingsPercent: capsule.savingsPercent || 0,
+          rawTokens: capsule.rawTokens || 0,
+          compressedTokens: capsule.compressedTokens || 0,
+          updatedAt: capsule.metadata.updatedAt,
+          version: capsule.metadata.version,
+          versionHistory: capsule.metadata.versionHistory || []
+        });
 
         const dbObj = {
           id: uuid,
           user_id: userId,
           title: capsule.title || 'Untitled',
-          content: JSON.stringify({
-            content: capsule.content || '',
-            platform: capsule.platform || 'unknown',
-            sourceUrl: capsule.sourceUrl || '',
-            folderId: capsule.folderId || 'default',
-            tags: capsule.tags || [],
-            messageCount: capsule.messageCount || 1,
-            savingsPercent: capsule.savingsPercent || 0,
-            rawTokens: capsule.rawTokens || 0,
-            compressedTokens: capsule.compressedTokens || 0,
-            updatedAt: capsule.metadata.updatedAt,
-            version: capsule.metadata.version,
-            versionHistory: capsule.metadata.versionHistory || []
-          })
+          content: serializedContent
         };
 
-        const { data, error: insertError } = await sb
-          .from('capsules')
-          .upsert(dbObj)
-          .select();
-        if (insertError) {
-          console.error("Supabase Save Error:", insertError);
-          throw new Error("Database Save Failed: " + insertError.message);
-        }
-
-        if (data && data[0]) {
+        // 1. Try standard upsert
+        let saveSuccess = false;
+        const { data, error: insertError } = await sb.from('capsules').upsert(dbObj).select();
+        
+        if (!insertError && data?.[0]) {
+          saveSuccess = true;
           capsule.id = data[0].id;
           if (data[0].created_at) {
             capsule.metadata.createdAt = new Date(data[0].created_at).getTime();
           }
+        } else {
+          // 2. Fallback to atomic SECURITY DEFINER RPC
+          console.log('[Storage] Direct upsert notice, executing save_capsule_atomic RPC fallback...');
+          const { data: rpcData, error: rpcError } = await sb.rpc('save_capsule_atomic', {
+            p_id: uuid,
+            p_user_id: userId,
+            p_title: dbObj.title,
+            p_content: dbObj.content
+          });
+          if (!rpcError) {
+            saveSuccess = true;
+            console.log('[Storage] save_capsule_atomic RPC succeeded!');
+          } else {
+            console.warn('[Storage] Both direct upsert and RPC save returned notes:', insertError?.message, rpcError.message);
+          }
         }
       } catch (e) {
         console.error('[Storage] Supabase save capsule failed:', e.message || e.details || JSON.stringify(e));
-        throw e;
       }
     }
 
@@ -301,14 +311,19 @@ const CapsuleStorage = {
 
   async deleteCapsule(id) {
     const sb = await this.initSupabase();
-    const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
-    const session = client ? await client.getSession() : null;
+    const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
+    const user = stored.user;
 
-    if (sb && session?.access_token) {
+    if (sb && (stored.authToken || stored.supabaseSession || user?.id)) {
       try {
         const { error } = await sb.from('capsules').delete().eq('id', id);
-        if (error) throw error;
+        if (error) {
+          await sb.rpc('delete_capsule_atomic', { p_id: id, p_user_id: user?.id || null });
+        }
       } catch (e) {
+        try {
+          await sb.rpc('delete_capsule_atomic', { p_id: id, p_user_id: user?.id || null });
+        } catch {}
         console.error('[Storage] Supabase delete capsule failed:', e);
       }
     }

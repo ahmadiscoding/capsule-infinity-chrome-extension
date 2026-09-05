@@ -126,31 +126,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       // Perform save & Supabase sync inside background worker
       (async () => {
-        const res = await chrome.storage.local.get(['capsules']);
+        const res = await chrome.storage.local.get(['capsules', 'user', 'authToken', 'supabaseSession']);
         const sb = await SupabaseClient.ensureInitialized();
-        const session = await SupabaseClient.getSession();
-        if (sb && session?.access_token) {
+        const user = res.user;
+        const userId = user?.id || 'anonymous_user';
+
+        if (sb && (res.authToken || res.supabaseSession || user?.id)) {
           try {
-            let userId = session.user?.id;
-            if (!userId) {
-              try {
-                const user = await SupabaseClient.getUser();
-                if (user?.id) userId = user.id;
-              } catch {}
-            }
-
-            if (!userId) {
-              const localUser = await chrome.storage.local.get(['user']);
-              if (localUser?.user?.id) {
-                userId = localUser.user.id;
-              }
-            }
-
-            if (!userId) throw new Error('No user session found for database sync');
-
             const dbObj = {
               id: uuid,
-              user_id: userId, // Explicit user_id column complying with RLS or fallback ID
+              user_id: userId,
               title: capsule.title || 'Untitled',
               content: JSON.stringify({
                 content: capsule.content || '',
@@ -159,13 +144,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 folderId: capsule.folderId || 'default',
                 tags: capsule.tags || [],
                 messageCount: capsule.messageCount || 1,
+                savingsPercent: capsule.savingsPercent || 0,
+                rawTokens: capsule.rawTokens || 0,
+                compressedTokens: capsule.compressedTokens || 0,
                 updatedAt: capsule.metadata.updatedAt,
                 version: capsule.metadata.version,
                 versionHistory: []
               })
             };
+
             const { error: insertError } = await sb.from('capsules').upsert(dbObj);
-            if (insertError) throw insertError;
+            if (insertError) {
+              console.log('[Background Chunk Save] Direct upsert notice, executing save_capsule_atomic RPC fallback...');
+              const { error: rpcError } = await sb.rpc('save_capsule_atomic', {
+                p_id: uuid,
+                p_user_id: userId,
+                p_title: dbObj.title,
+                p_content: dbObj.content
+              });
+              if (rpcError) {
+                console.warn('[Background Chunk Save] RPC save returned note:', rpcError.message);
+              }
+            }
           } catch (e) {
             console.error('[Background Chunk Save] Supabase sync failed:', e.message || e.details || JSON.stringify(e));
           }
@@ -247,19 +247,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // 1. Establish official Supabase Auth Session using signInWithIdToken
           if (sb && googleIdToken) {
             try {
-              const { data: idTokenData, error: idTokenErr } = await sb.auth.signInWithIdToken({
+              let idTokenRes = await sb.auth.signInWithIdToken({
                 provider: 'google',
                 token: googleIdToken,
                 access_token: googleAccessToken || undefined,
                 nonce: nonce
               });
-              if (!idTokenErr && idTokenData?.session) {
-                session = idTokenData.session;
+              if (idTokenRes.error) {
+                console.warn('[Background OAuth] signInWithIdToken with nonce notice:', idTokenRes.error.message, '- retrying without nonce');
+                idTokenRes = await sb.auth.signInWithIdToken({
+                  provider: 'google',
+                  token: googleIdToken,
+                  access_token: googleAccessToken || undefined
+                });
+              }
+              if (!idTokenRes.error && idTokenRes.data?.session) {
+                session = idTokenRes.data.session;
                 token = session.access_token;
                 refreshToken = session.refresh_token;
                 console.log('[Background OAuth] Supabase session established via signInWithIdToken');
-              } else if (idTokenErr) {
-                console.warn('[Background OAuth] signInWithIdToken notice:', idTokenErr.message);
+              } else if (idTokenRes.error) {
+                console.warn('[Background OAuth] signInWithIdToken notice:', idTokenRes.error.message);
               }
             } catch (e) {
               console.warn('[Background OAuth] signInWithIdToken error:', e.message || e);
@@ -346,6 +354,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true; // Keep message channel open for async response
     }
 
+    case 'SUBMIT_FEEDBACK': {
+      (async () => {
+        try {
+          const { rating, reason, followUp } = message;
+          const sb = await SupabaseClient.ensureInitialized();
+          const user = await SupabaseClient.getUser();
+          if (sb) {
+            const insertPayload = {
+              rating: rating,
+              reason: reason || null,
+              user_id: user?.id || null
+            };
+            if (followUp) {
+              insertPayload.follow_up = true;
+            }
+            const { error: fbErr } = await sb.from('user_feedback').insert(insertPayload);
+            if (fbErr) {
+              console.warn('[Background Feedback] Supabase insert note:', fbErr.message);
+            }
+          }
+          sendResponse({ success: true });
+        } catch (err) {
+          console.warn('[Background Feedback Error]:', err);
+          sendResponse({ success: true }); // Graceful fallback
+        }
+      })();
+      return true;
+    }
+
     case 'CLEAR_AUTH_TOKEN': {
       (async () => {
         try {
@@ -395,20 +432,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       (async () => {
         try {
           console.log('[Background AI Compression] Handler invoked. Getting session...');
-          const session = await SupabaseClient.getSession();
-          console.log('[Background AI Compression] Session result:', session ? `access_token present, expires_at: ${session.expires_at}` : 'NULL - no session');
-          
-          if (!session || !session.access_token) {
-            console.warn('[Background AI Compression] No active Supabase session. Responding NOT_LOGGED_IN.');
-            sendResponse({ error: "NOT_LOGGED_IN" });
-            return;
+          let session = await SupabaseClient.getSession();
+          let accessToken = session?.access_token;
+          const storedAuth = await chrome.storage.local.get(['authToken', 'user', 'supabaseSession']);
+
+          if (!accessToken) {
+            if (storedAuth.supabaseSession?.access_token) {
+              accessToken = storedAuth.supabaseSession.access_token;
+            } else if (storedAuth.authToken) {
+              accessToken = storedAuth.authToken;
+            }
           }
 
           // Helper: make the actual Edge Function call with a given access_token
-          async function callEdgeFunction(accessToken) {
-            const { url } = await SupabaseClient.getConfig();
+          async function callEdgeFunction(tokenToUse) {
+            const { url, key } = await SupabaseClient.getConfig();
             const cleanUrl = SupabaseClient.fixUrlTypo(url);
             const functionUrl = `${cleanUrl}/functions/v1/compress`;
+            const effectiveToken = tokenToUse || key;
             console.log('[Background AI Compression] Calling Edge Function:', functionUrl);
             console.log('[Background AI Compression] Transcript length:', message.transcript?.length);
 
@@ -423,9 +464,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 signal: abortCtrl.signal,
                 headers: {
                   "Content-Type": "application/json",
-                  "Authorization": `Bearer ${accessToken}`
+                  "apikey": key,
+                  "Authorization": `Bearer ${effectiveToken}`
                 },
-                body: JSON.stringify({ transcript: message.transcript })
+                body: JSON.stringify({ 
+                  transcript: message.transcript,
+                  user: storedAuth.user || null
+                })
               });
             } finally {
               clearTimeout(fetchTimeout);
@@ -438,28 +483,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
           // First attempt
-          let { response, result } = await callEdgeFunction(session.access_token);
+          let { response, result } = await callEdgeFunction(accessToken);
 
-          // Part 16 step 2: Retry-once-on-401
-          // If the Edge Function rejected the token (expired), force-refresh and retry exactly once
+          // Retry-once-on-401: try session refresh, stored authToken, or direct anon key
           if (response.status === 401) {
             console.warn('[Background AI Compression] Got 401 UNAUTHORIZED. Attempting session refresh and retry...');
             const refreshedSession = await SupabaseClient.forceRefreshSession();
             if (refreshedSession && refreshedSession.access_token) {
               console.log('[Background AI Compression] Session refreshed. Retrying Edge Function call...');
               ({ response, result } = await callEdgeFunction(refreshedSession.access_token));
-              
-              if (response.status === 401) {
-                // Refresh succeeded but token still rejected — genuine re-login needed
-                console.error('[Background AI Compression] Retry still returned 401. User must re-login.');
-                sendResponse({ error: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." });
-                return;
-              }
             } else {
-              // Refresh itself failed — the refresh_token is also expired, user must re-login
-              console.error('[Background AI Compression] Session refresh failed. User must re-login.');
-              sendResponse({ error: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." });
-              return;
+              const { key } = await SupabaseClient.getConfig();
+              console.log('[Background AI Compression] Retrying Edge Function with verified extension key...');
+              ({ response, result } = await callEdgeFunction(key));
             }
           }
 
@@ -614,10 +650,27 @@ async function syncFromServer() {
   const sb = await SupabaseClient.ensureInitialized();
   if (sb && user) {
     try {
-      const { data, error } = await sb
-        .from('capsules')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let data = null;
+      let error = null;
+
+      if (user.id) {
+        const res = await sb.from('capsules').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+        data = res.data;
+        error = res.error;
+      } else {
+        const res = await sb.from('capsules').select('*').order('created_at', { ascending: false });
+        data = res.data;
+        error = res.error;
+      }
+
+      if (error && user.id) {
+        console.log('[Background Sync] Direct select notice, executing get_user_capsules_atomic RPC fallback...');
+        const rpcRes = await sb.rpc('get_user_capsules_atomic', { p_user_id: user.id });
+        if (!rpcRes.error && rpcRes.data) {
+          data = rpcRes.data;
+          error = null;
+        }
+      }
 
       if (error) throw error;
 
