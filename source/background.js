@@ -190,9 +190,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           const sb = await SupabaseClient.ensureInitialized();
           if (sb) {
-            const redirectUrl = chrome.identity.getRedirectURL();
+            const redirectUrl = chrome.identity.getRedirectURL(); // e.g. https://<extension-id>.chromiumapp.org/
 
-            // Initiate Supabase OAuth to get the raw authorization URL
+            // 1. Initiate Supabase PKCE OAuth to get the authorization URL
             const { data: oauthData, error: oauthErr } = await sb.auth.signInWithOAuth({
               provider: 'google',
               options: {
@@ -211,6 +211,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const authUrl = oauthData.url;
             console.log('[Background OAuth] Launching WebAuthFlow with URL:', authUrl);
 
+            // 2. Launch Chrome Identity Web Auth Flow
             let responseUrl = null;
             try {
               responseUrl = await new Promise((resolve, reject) => {
@@ -220,44 +221,58 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 }, (url) => {
                   if (chrome.runtime.lastError) {
                     reject(new Error(chrome.runtime.lastError.message));
+                  } else if (!url) {
+                    reject(new Error("Authorization flow was cancelled or closed."));
                   } else {
                     resolve(url);
                   }
                 });
               });
             } catch (authFlowErr) {
-              console.error('[Background OAuth] launchWebAuthFlow failed for URL:', authUrl, authFlowErr);
+              console.error('[Background OAuth] launchWebAuthFlow error:', authFlowErr.message || authFlowErr);
               throw authFlowErr;
             }
 
-            if (!responseUrl) throw new Error('No redirect URL returned');
+            if (!responseUrl) throw new Error('No redirect URL returned from authentication provider.');
 
+            // 3. Extract authorization code or tokens from callback URL
             const parsedUrl = new URL(responseUrl);
-            let code = parsedUrl.searchParams.get("code") || new URLSearchParams(parsedUrl.hash.substring(1)).get("code");
-            let session = null;
+            const code = parsedUrl.searchParams.get("code") || (parsedUrl.hash ? new URLSearchParams(parsedUrl.hash.substring(1)).get("code") : null);
+            const hashParams = parsedUrl.hash ? new URLSearchParams(parsedUrl.hash.substring(1)) : null;
+            const accessToken = hashParams?.get("access_token") || parsedUrl.searchParams.get("access_token");
+            const refreshTok = hashParams?.get("refresh_token") || parsedUrl.searchParams.get("refresh_token");
 
+            let session = null;
             if (code) {
+              // Exchange PKCE authorization code for session
               const { data: sessionData, error: sessionErr } = await sb.auth.exchangeCodeForSession(code);
               if (sessionErr) throw sessionErr;
-              session = sessionData.session;
-              token = session.access_token;
-              refreshToken = session.refresh_token;
+              session = sessionData?.session;
+            } else if (accessToken) {
+              // Fallback to direct token set if implicit grant is returned
+              const { data: sessionData, error: setSessionError } = await sb.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshTok || ''
+              });
+              if (setSessionError) throw setSessionError;
+              session = sessionData?.session || { access_token: accessToken, refresh_token: refreshTok };
             } else {
-              const params = new URLSearchParams(parsedUrl.hash.substring(1));
-              token = params.get("access_token");
-              refreshToken = params.get("refresh_token");
-              if (!token) throw new Error('No auth code or access token found in redirect URL');
-              session = { access_token: token, refresh_token: refreshToken };
-              await sb.auth.setSession(session);
+              const errDesc = parsedUrl.searchParams.get("error_description") || hashParams?.get("error_description") || parsedUrl.searchParams.get("error");
+              throw new Error(errDesc || "No authorization code or access token found in redirect response.");
             }
 
+            token = session?.access_token || accessToken;
+            refreshToken = session?.refresh_token || refreshTok;
+
+            // 4. Retrieve authenticated user profile
             const { data: { user }, error: userErr } = await sb.auth.getUser();
             if (userErr || !user) throw new Error('Failed to retrieve user profile from Supabase');
 
             userObj = {
               id: user.id,
               email: user.email,
-              name: user.user_metadata?.full_name || user.email.split('@')[0],
+              name: user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0],
+              avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
               createdAt: Date.now()
             };
 
@@ -287,6 +302,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               }, (url) => {
                 if (chrome.runtime.lastError) {
                   reject(new Error(chrome.runtime.lastError.message));
+                } else if (!url) {
+                  reject(new Error("Authorization flow was cancelled."));
                 } else {
                   resolve(url);
                 }
@@ -311,7 +328,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const name = profile.name || email.split('@')[0];
 
             const id = 'g_' + email.replace(/[^a-zA-Z0-9]/g, '_');
-            userObj = { id, email, name, createdAt: Date.now() };
+            userObj = { id, email, name, avatar: profile.picture || null, createdAt: Date.now() };
 
             await chrome.storage.local.set({
               authToken: token,
@@ -337,7 +354,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     case 'CLEAR_AUTH_TOKEN': {
-      const { token } = message;
       (async () => {
         try {
           await SupabaseClient.signOut();

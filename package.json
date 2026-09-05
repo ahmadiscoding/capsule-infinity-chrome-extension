@@ -3,8 +3,8 @@
   "version": "2.0.0",
   "description": "Capture AI conversations as reusable Capsules and sync to Supabase Cloud.",
   "scripts": {
-    "test": "node -e 'console.log("All code formatting checks passed!")'",
-    "lint:manifest": "node -e 'const fs=require("fs"); const m=JSON.parse(fs.readFileSync("manifest.json")); console.log("Manifest is valid JSON!");'"
+    "test": "node -e \"console.log('All code formatting checks passed!')\"",
+    "lint:manifest": "node -e \"const fs=require('fs'); const m=JSON.parse(fs.readFileSync('manifest.json')); console.log('Manifest is valid JSON!');\""
   },
   "keywords": [
     "chrome-extension",

@@ -1,7 +1,7 @@
 // ============================================
 // Capsule Infinity - Shared Supabase Client
 // Single source of truth for Supabase initialization
-// Handles MV3 service worker suspension-safe session management
+// Handles MV3 service worker suspension-safe session management & PKCE OAuth
 // ============================================
 
 const DEFAULT_SUPABASE_URL = 'https://saqruqtjjinuslcxryuc.supabase.co';
@@ -9,6 +9,31 @@ const DEFAULT_SUPABASE_KEY = 'sb_publishable_mp0xexkqtCWhPHRuE0FimQ_yjstjdTC';
 
 // Session expiry safety margin: refresh if token expires within this many seconds
 const SESSION_EXPIRY_MARGIN_SECONDS = 120;
+
+// Custom storage adapter for Chrome MV3 extension environment
+const chromeStorageAdapter = {
+  getItem: (key) => {
+    return new Promise((resolve) => {
+      chrome.storage.local.get([key], (result) => {
+        resolve(result[key] || null);
+      });
+    });
+  },
+  setItem: (key, value) => {
+    return new Promise((resolve) => {
+      chrome.storage.local.set({ [key]: value }, () => {
+        resolve();
+      });
+    });
+  },
+  removeItem: (key) => {
+    return new Promise((resolve) => {
+      chrome.storage.local.remove([key], () => {
+        resolve();
+      });
+    });
+  },
+};
 
 const SupabaseClient = {
   instance: null,
@@ -24,7 +49,7 @@ const SupabaseClient = {
   },
 
   fixUrlTypo(url) {
-    let cleanUrl = url.trim().replace(/\/+$/, '');
+    let cleanUrl = (url || DEFAULT_SUPABASE_URL).trim().replace(/\/+$/, '');
     if (cleanUrl.includes('saqruqtjinuslcxryuc') && !cleanUrl.includes('saqruqtjjinuslcxryuc')) {
       cleanUrl = 'https://saqruqtjjinuslcxryuc.supabase.co';
     }
@@ -48,31 +73,41 @@ const SupabaseClient = {
     }
 
     if (typeof supabase !== 'undefined' && supabase.createClient) {
-      this.instance = supabase.createClient(cleanUrl, key);
+      this.instance = supabase.createClient(cleanUrl, key, {
+        auth: {
+          storage: chromeStorageAdapter,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+          flowType: 'pkce'
+        }
+      });
       this.url = cleanUrl;
       this.key = key;
       this.initialized = true;
 
-      // Part 16: Restore session from chrome.storage.local on every init.
-      // Critical for MV3 — the service worker can be killed at any time,
-      // so we always re-hydrate from persistent storage rather than relying
-      // on the in-memory Supabase client which loses state on suspension.
+      // Restore session from chrome.storage.local on every init if present
       if (session) {
         try {
           await this.instance.auth.setSession(session);
           console.log('[SupabaseClient] Session restored from chrome.storage.local');
         } catch (e) {
-          console.warn('[SupabaseClient] Failed to restore session:', e);
+          console.warn('[SupabaseClient] Failed to restore session:', e?.message || e);
         }
       }
 
       // Listen for auth changes and persist session to chrome.storage.local
-      this.instance.auth.onAuthStateChange((event, session) => {
+      this.instance.auth.onAuthStateChange((event, newSession) => {
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          chrome.storage.local.set({ supabaseSession: session });
+          if (newSession) {
+            chrome.storage.local.set({
+              supabaseSession: newSession,
+              authToken: newSession.access_token
+            });
+          }
           console.log('[SupabaseClient] Session persisted to chrome.storage.local (event:', event, ')');
         } else if (event === 'SIGNED_OUT') {
-          chrome.storage.local.remove(['supabaseSession']);
+          chrome.storage.local.remove(['supabaseSession', 'authToken', 'user', 'googleAuth']);
         }
       });
 
@@ -87,13 +122,7 @@ const SupabaseClient = {
   },
 
   /**
-   * Part 16: Session-aware getSession that proactively refreshes expired/near-expiry tokens.
-   *
-   * MV3 service workers get killed after ~30s of inactivity, which silently breaks
-   * Supabase's setInterval-based auto-refresh timer. This method:
-   * 1. Re-hydrates from chrome.storage.local if the in-memory client lost state
-   * 2. Checks expires_at and proactively refreshes if within the safety margin
-   * 3. Returns a guaranteed-fresh session or null
+   * Session-aware getSession that proactively refreshes expired/near-expiry tokens.
    */
   async getSession() {
     if (!this.instance) await this.init();
@@ -103,7 +132,6 @@ const SupabaseClient = {
     let { data: { session } } = await this.instance.auth.getSession();
 
     // If no in-memory session, try re-hydrating from chrome.storage.local
-    // (handles MV3 service worker restart where in-memory state is lost)
     if (!session) {
       const stored = await chrome.storage.local.get(['supabaseSession']);
       if (stored.supabaseSession) {
@@ -136,12 +164,13 @@ const SupabaseClient = {
         if (!error && data?.session) {
           session = data.session;
           // Persist the refreshed session immediately
-          await chrome.storage.local.set({ supabaseSession: session });
+          await chrome.storage.local.set({
+            supabaseSession: session,
+            authToken: session.access_token
+          });
           console.log('[SupabaseClient] Session refreshed successfully. New expires_at:', session.expires_at);
         } else {
           console.warn('[SupabaseClient] Proactive refresh failed:', error?.message);
-          // Session is stale but we still return it — the caller's retry-on-401
-          // logic will handle the server-side rejection
         }
       } catch (e) {
         console.warn('[SupabaseClient] Proactive refresh threw:', e.message);
@@ -152,15 +181,12 @@ const SupabaseClient = {
   },
 
   /**
-   * Part 16: Force-refresh the session and return the new one.
-   * Used by the retry-on-401 logic in background.js.
-   * Returns the refreshed session or null if refresh fails.
+   * Force-refresh the session and return the new one.
    */
   async forceRefreshSession() {
     if (!this.instance) await this.init();
     if (!this.instance) return null;
 
-    // First try re-hydrating from storage in case service worker restarted
     const stored = await chrome.storage.local.get(['supabaseSession']);
     if (stored.supabaseSession) {
       try {
@@ -173,7 +199,10 @@ const SupabaseClient = {
     try {
       const { data, error } = await this.instance.auth.refreshSession();
       if (!error && data?.session) {
-        await chrome.storage.local.set({ supabaseSession: data.session });
+        await chrome.storage.local.set({
+          supabaseSession: data.session,
+          authToken: data.session.access_token
+        });
         console.log('[SupabaseClient] forceRefreshSession succeeded. New expires_at:', data.session.expires_at);
         return data.session;
       } else {
@@ -193,8 +222,12 @@ const SupabaseClient = {
       const { data: { session } } = await this.instance.auth.getSession();
       if (session?.user) return session.user;
     } catch {}
-    const { data: { user } } = await this.instance.auth.getUser();
-    return user;
+    try {
+      const { data: { user } } = await this.instance.auth.getUser();
+      return user || null;
+    } catch {
+      return null;
+    }
   },
 
   async signOut() {
@@ -207,7 +240,7 @@ const SupabaseClient = {
     }
     this.instance = null;
     this.initialized = false;
-    await chrome.storage.local.remove(['supabaseSession']);
+    await chrome.storage.local.remove(['supabaseSession', 'authToken', 'user', 'googleAuth', 'lastSync']);
   },
 
   async ensureInitialized() {
