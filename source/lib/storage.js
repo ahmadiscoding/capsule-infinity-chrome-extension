@@ -96,17 +96,16 @@ const CapsuleStorage = {
           userId = localUser?.user?.id;
         }
 
+        let query = sb.from('capsules').select('*').order('created_at', { ascending: false });
         if (userId) {
-          const { data, error } = await sb
-            .from('capsules')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
+          query = query.eq('user_id', userId);
+        }
 
-          if (error) throw error;
+        const { data, error } = await query;
+        if (error) throw error;
 
           if (data) {
-            return data.map(row => {
+            const mapped = data.map(row => {
               let parsed = {};
               try {
                 parsed = JSON.parse(row.content);
@@ -135,8 +134,9 @@ const CapsuleStorage = {
                 }
               };
             });
+            chrome.storage.local.set({ capsules: mapped });
+            return mapped;
           }
-        }
       } catch (e) {
         console.error('[Storage] Supabase fetch capsules failed, falling back to local:', e.message || e.details || JSON.stringify(e));
       }
