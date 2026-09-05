@@ -496,7 +496,8 @@ serve(async (req: Request) => {
     }
 
     // 2. Per-user monthly limit check via SECURITY DEFINER RPC
-    if (user?.id) {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(user?.id || "");
+    if (isUuid) {
       const { data: usageData, error: usageErr } = await supabaseAdmin.rpc("check_and_increment_usage", {
         target_user_id: user.id,
         max_limit: MONTHLY_FREE_LIMIT
