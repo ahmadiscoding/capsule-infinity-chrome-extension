@@ -2,6 +2,17 @@
 // Capsule Infinity - Background Service Worker
 // ============================================
 
+try {
+  importScripts('lib/supabase-js.js', 'lib/supabase-client.js');
+} catch (e) {
+  console.warn('[Background] importScripts relative failed, trying root-relative path:', e);
+  try {
+    importScripts('/lib/supabase-js.js', '/lib/supabase-client.js');
+  } catch (err) {
+    console.error('[Background] importScripts failed to load Supabase libraries:', err);
+  }
+}
+
 const originalWarn = console.warn;
 console.warn = function(...args) {
   if (args[0] && typeof args[0] === 'string' && args[0].includes('Multiple GoTrueClient instances detected')) {
@@ -9,8 +20,6 @@ console.warn = function(...args) {
   }
   originalWarn.apply(console, args);
 };
-
-importScripts('lib/supabase-js.js', 'lib/supabase-client.js');
 
 // Open side panel
 chrome.action.onClicked.addListener((tab) => {
