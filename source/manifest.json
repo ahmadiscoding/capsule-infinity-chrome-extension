@@ -106,7 +106,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["assets/*", "shared/*"],
+      "resources": ["assets/*", "shared/*", "lib/*"],
       "matches": ["<all_urls>"]
     }
   ],
