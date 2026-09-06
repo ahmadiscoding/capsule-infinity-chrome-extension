@@ -211,7 +211,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
           // Single Direct Google OAuth Flow (shows "to continue to Capsule Infinity")
           console.log('[Background OAuth] Launching single Google OAuth flow for Capsule Infinity...');
-          const nonce = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+          const rawNonce = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+
+          // CRITICAL: Hash the nonce with SHA-256 before sending to Google.
+          // Google embeds the nonce verbatim into the ID token's "nonce" claim.
+          // Supabase's signInWithIdToken receives the RAW nonce, computes SHA-256(raw),
+          // and compares it against the token's "nonce" claim.
+          // So: Google must receive SHA-256(raw) → embeds it in token → Supabase computes SHA-256(raw) → match ✓
+          const nonceHashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(rawNonce));
+          const nonceHashArray = Array.from(new Uint8Array(nonceHashBuffer));
+          const hashedNonce = nonceHashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
           const scopes = encodeURIComponent("openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile");
 
           const directAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth` +
@@ -219,7 +229,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                                 `&response_type=token%20id_token` +
                                 `&redirect_uri=${encodeURIComponent(redirectUrl)}` +
                                 `&scope=${scopes}` +
-                                `&nonce=${nonce}` +
+                                `&nonce=${hashedNonce}` +
                                 `&prompt=select_account`;
 
           const responseUrl = await new Promise((resolve, reject) => {
@@ -252,21 +262,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           token = googleAccessToken || googleIdToken;
 
           // 1. Establish official Supabase Auth Session using signInWithIdToken
+          // Pass the RAW nonce — Supabase will SHA-256 hash it internally and compare
+          // against the hashed nonce that Google embedded in the ID token's "nonce" claim.
           if (sb && googleIdToken) {
             try {
-              let idTokenRes = await sb.auth.signInWithIdToken({
+              const idTokenRes = await sb.auth.signInWithIdToken({
                 provider: 'google',
                 token: googleIdToken,
                 access_token: googleAccessToken || undefined,
-                nonce: nonce
+                nonce: rawNonce
               });
               if (idTokenRes.error) {
-                console.warn('[Background OAuth] signInWithIdToken with nonce notice:', idTokenRes.error.message, '- retrying without nonce');
-                idTokenRes = await sb.auth.signInWithIdToken({
-                  provider: 'google',
-                  token: googleIdToken,
-                  access_token: googleAccessToken || undefined
-                });
+                console.error('[Background OAuth] signInWithIdToken failed:', idTokenRes.error.message);
               }
               if (!idTokenRes.error && idTokenRes.data?.session) {
                 session = idTokenRes.data.session;
