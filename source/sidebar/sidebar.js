@@ -1524,6 +1524,22 @@ console.warn = function(...args) {
   }
 
   async function loadProfileInfo(user, capsules, folders, teams) {
+    if (typeof SupabaseClient !== 'undefined') {
+      try {
+        const liveUser = await SupabaseClient.getUser();
+        if (liveUser) {
+          user = {
+            id: liveUser.id,
+            email: liveUser.email,
+            name: liveUser.user_metadata?.full_name || liveUser.user_metadata?.name || user?.name || liveUser.email?.split('@')[0] || 'User',
+            avatar: liveUser.user_metadata?.avatar_url || liveUser.user_metadata?.picture || user?.avatar || null,
+            createdAt: user?.createdAt || Date.now()
+          };
+          await chrome.storage.local.set({ user });
+        }
+      } catch {}
+    }
+
     if (!user) {
       // Try fetching from API
       if (API) {

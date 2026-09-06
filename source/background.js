@@ -281,53 +281,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           }
 
-          // 2. Fetch Google profile info
+          // 2. Fetch Google profile info for display metadata
+          let googleProfile = null;
           if (googleAccessToken) {
             try {
               const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${googleAccessToken}` }
               });
               if (profileRes.ok) {
-                const profile = await profileRes.json();
-                const email = profile.email;
-                const name = profile.name || email?.split('@')[0] || 'User';
-                const id = session?.user?.id || ('g_' + (email ? email.replace(/[^a-zA-Z0-9]/g, '_') : 'user'));
-                userObj = {
-                  id: id,
-                  email: email,
-                  name: name,
-                  avatar: profile.picture || null,
-                  createdAt: Date.now()
-                };
+                googleProfile = await profileRes.json();
               }
             } catch (e) {
               console.warn('[Background OAuth] Google userinfo fetch error:', e.message || e);
             }
           }
 
-          // 3. If Supabase session user exists, merge Supabase user ID and profile
-          if (sb && session) {
+          // 3. Resolve official Supabase Auth user UUID
+          let sbUser = session?.user;
+          if (!sbUser && sb) {
             try {
               const { data: { user } } = await sb.auth.getUser();
-              if (user) {
-                userObj = {
-                  id: user.id,
-                  email: user.email || userObj?.email,
-                  name: user.user_metadata?.full_name || user.user_metadata?.name || userObj?.name || user.email?.split('@')[0] || 'User',
-                  avatar: user.user_metadata?.avatar_url || user.user_metadata?.picture || userObj?.avatar || null,
-                  createdAt: Date.now()
-                };
-              }
+              if (user) sbUser = user;
             } catch {}
           }
 
-          if (!userObj && !token) {
-            throw new Error("Unable to complete sign-in. Please try again.");
+          if (!sbUser || !sbUser.id) {
+            throw new Error("Unable to establish a secure session with Supabase. Please try signing in again.");
           }
 
-          if (!userObj) {
-            userObj = { id: 'user_' + Date.now(), email: 'user@example.com', name: 'User', createdAt: Date.now() };
-          }
+          userObj = {
+            id: sbUser.id,
+            email: sbUser.email || googleProfile?.email || 'user@capsuleinfinity.com',
+            name: sbUser.user_metadata?.full_name || sbUser.user_metadata?.name || googleProfile?.name || sbUser.email?.split('@')[0] || 'User',
+            avatar: sbUser.user_metadata?.avatar_url || sbUser.user_metadata?.picture || googleProfile?.picture || null,
+            createdAt: Date.now()
+          };
 
           // 4. Save session and auth state
           await chrome.storage.local.set({

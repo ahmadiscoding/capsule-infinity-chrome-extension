@@ -402,8 +402,23 @@ console.warn = function(...args) {
 
   async function showAccountProfile() {
     document.getElementById('accountModal')?.remove();
-    const result = await chrome.storage.local.get('user');
-    const user = result.user || {};
+    let result = await chrome.storage.local.get('user');
+    let user = result.user || {};
+    try {
+      if (typeof SupabaseClient !== 'undefined') {
+        const liveUser = await SupabaseClient.getUser();
+        if (liveUser) {
+          user = {
+            id: liveUser.id,
+            email: liveUser.email,
+            name: liveUser.user_metadata?.full_name || liveUser.user_metadata?.name || user.name || liveUser.email?.split('@')[0] || 'User',
+            createdAt: user.createdAt || Date.now()
+          };
+          await chrome.storage.local.set({ user });
+        }
+      }
+    } catch {}
+
     const email = user.email || 'N/A';
     const name = user.name || 'User';
     const created = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A';
