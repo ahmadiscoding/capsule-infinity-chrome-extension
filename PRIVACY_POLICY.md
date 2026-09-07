@@ -1,6 +1,6 @@
 # Privacy Policy for Capsule Infinity
 
-**Last Updated: September 2, 2026**
+**Last Updated: September 7, 2026**
 
 **Capsule Infinity** ("we", "our", or "the extension") is a browser extension designed to capture AI chat conversations as structured, portable context units ("Capsules") and synchronize them across devices. We are committed to protecting your privacy and handling your data with transparency and security.
 
@@ -72,7 +72,33 @@ We do not disclose your data to any other third parties unless required by appli
 
 * **Encryption in Transit**: All communications between the extension, Supabase backend, and AI APIs use modern TLS encryption (HTTPS).
 * **Row Level Security (RLS)**: Cloud database tables enforce strict user-level isolation policies. No user can read, modify, or delete another user's capsules.
-* **User Data Control & Deletion**: You retain 100% ownership of your data. You can delete individual capsules or wipe your entire local library at any time directly through the extension UI. If you wish to delete your cloud account and all associated cloud capsules, you can request full account deletion by contacting support.
+* **User Data Control & Deletion**: You retain 100% ownership of your data. You can delete individual capsules or wipe your entire local library at any time directly through the extension UI.
+
+### 6.1 Data Retention
+
+* **Local Data**: Capsules, fingerprints, and preferences stored in `chrome.storage.local` persist on your device indefinitely until you delete them yourself (individually, in bulk, or by uninstalling the extension, which erases all local extension data automatically).
+* **Cloud Data**: If you enable cloud sync, your account identifiers and synced capsules are retained in our Supabase database for as long as your account remains active. We do not use retained data for any purpose beyond providing the extension's core sync and compression features.
+* **Server Logs**: Conversation transcripts sent to our Edge Function for AI compression are processed in memory and are not written to persistent logs or storage; they are discarded immediately after the structured capsule is generated and returned to you.
+
+### 6.2 Data Deletion
+
+You can delete your data at any time through the following processes:
+
+* **Local data only**: Use the "Delete" option on any individual capsule, or "Clear All Local Data" in the extension's settings, to permanently erase content from your device. Uninstalling the extension also erases all local data immediately.
+* **Full account and cloud data deletion**: Click "Delete Account" in the extension's Account menu (available in both the popup and side panel). This immediately and permanently deletes your Supabase Auth account, all cloud-synced capsules, usage records, and any associated data. This action cannot be undone.
+* **Alternative**: If you are unable to access the extension, you may email `capsuleinfinity.support@gmail.com` with your account email and we will process full account and data deletion within 30 days.
+
+### 6.3 Children's Privacy
+
+Capsule Infinity is not directed at, and is not intended for use by, children under the age of 13. We do not knowingly collect personal information from children under 13. If we become aware that we have inadvertently collected such information, we will delete it promptly.
+
+### 6.4 Cookies and Tracking Technologies
+
+Capsule Infinity does **not** use cookies, web beacons, fingerprinting scripts, or any third-party analytics or advertising trackers. The "Conversation Fingerprints" described in Section 2A are local content hashes used only for on-device deduplication and are never used to track you across sites or sessions.
+
+### 6.5 International Users
+
+Our cloud infrastructure (Supabase) may process and store data in data centers located outside of your country of residence. By using cloud sync, you consent to this transfer and processing. We take reasonable steps to ensure your data receives an adequate level of protection wherever it is processed.
 
 ---
 
