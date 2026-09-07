@@ -505,14 +505,45 @@
     parse(data) {
       if (!data || !data.mapping) return null;
       const msgs = [];
-      Object.values(data.mapping).forEach(node => {
-        const msg = node.message;
-        if (msg && msg.content && msg.content.parts) {
-          const role = msg.author?.role || 'user';
-          const text = msg.content.parts.filter(p => typeof p === 'string').join('\n').trim();
-          if (text && role !== 'system') {
-            msgs.push({ role: role === 'assistant' ? 'assistant' : 'user', content: text });
+
+      // 1. Preferred: Walk the active branch backwards from current_node to root
+      if (data.current_node && data.mapping[data.current_node]) {
+        let currId = data.current_node;
+        const branchNodes = [];
+        const visited = new Set();
+        while (currId && data.mapping[currId] && !visited.has(currId)) {
+          visited.add(currId);
+          const node = data.mapping[currId];
+          if (node.message) {
+            branchNodes.unshift(node.message);
           }
+          currId = node.parent;
+        }
+
+        branchNodes.forEach(msg => {
+          if (msg && msg.content && msg.content.parts) {
+            const role = msg.author?.role || 'user';
+            const text = msg.content.parts.filter(p => typeof p === 'string').join('\n').trim();
+            if (text && role !== 'system') {
+              msgs.push({ role: role === 'assistant' ? 'assistant' : 'user', content: text });
+            }
+          }
+        });
+
+        if (msgs.length > 0) return msgs;
+      }
+
+      // 2. Fallback: Sort chronological by create_time to prevent scrambled hash iteration
+      const sortedNodes = Object.values(data.mapping)
+        .filter(n => n && n.message && n.message.content && n.message.content.parts)
+        .sort((a, b) => ((a.message.create_time || 0) - (b.message.create_time || 0)));
+
+      sortedNodes.forEach(node => {
+        const msg = node.message;
+        const role = msg.author?.role || 'user';
+        const text = msg.content.parts.filter(p => typeof p === 'string').join('\n').trim();
+        if (text && role !== 'system') {
+          msgs.push({ role: role === 'assistant' ? 'assistant' : 'user', content: text });
         }
       });
       return msgs;
@@ -521,22 +552,65 @@
 
   const ClaudeAdapter = {
     parse(data) {
-      const rawMsgs = data?.chat_messages || (Array.isArray(data) ? data : data?.messages);
+      if (!data) return null;
+      let rawMsgs = data?.chat_messages || (Array.isArray(data) ? data : data?.messages);
       if (!Array.isArray(rawMsgs)) return null;
+
+      // Reconstruct active branch in chronological order if current_leaf_message_uuid is present
+      if (data.current_leaf_message_uuid && Array.isArray(data.chat_messages)) {
+        const msgMap = new Map();
+        data.chat_messages.forEach(m => {
+          if (m && m.uuid) msgMap.set(m.uuid, m);
+        });
+
+        const branch = [];
+        let currUuid = data.current_leaf_message_uuid;
+        const visited = new Set();
+        while (currUuid && msgMap.has(currUuid) && !visited.has(currUuid)) {
+          visited.add(currUuid);
+          const msg = msgMap.get(currUuid);
+          branch.unshift(msg);
+          currUuid = msg.parent_message_uuid;
+        }
+
+        if (branch.length > 0) {
+          rawMsgs = branch;
+        }
+      }
+
       const msgs = [];
       rawMsgs.forEach(msg => {
-        const role = msg.sender === 'assistant' ? 'assistant' : 'user';
+        const sender = (msg.sender || msg.role || '').toLowerCase();
+        const role = (sender === 'assistant' || sender === 'model') ? 'assistant' : 'user';
+
         let text = '';
-        if (typeof msg.text === 'string') {
+        if (typeof msg.text === 'string' && msg.text.trim()) {
           text = msg.text.trim();
         } else if (Array.isArray(msg.content)) {
-          text = msg.content.map(c => c.text || '').join('\n').trim();
+          const parts = [];
+          for (const block of msg.content) {
+            if (!block) continue;
+            if (typeof block === 'string') {
+              parts.push(block);
+            } else if (block.type === 'text' && typeof block.text === 'string') {
+              parts.push(block.text);
+            } else if (block.type === 'thinking' && typeof block.thinking === 'string') {
+              parts.push(`<thinking>\n${block.thinking}\n</thinking>`);
+            } else if (block.text && typeof block.text === 'string') {
+              parts.push(block.text);
+            }
+          }
+          text = parts.join('\n\n').trim();
+        } else if (typeof msg.content === 'string') {
+          text = msg.content.trim();
         }
+
         if (text) {
           msgs.push({ role, content: text });
         }
       });
-      return msgs;
+
+      return msgs.length > 0 ? msgs : null;
     }
   };
 
@@ -604,7 +678,12 @@
   setInterval(invalidateStaleNetworkCache, 1000);
 
   window.addEventListener('ci-network-payload', (event) => {
-    const { platform, data, pageUrl } = event.detail;
+    const { platform, data, pageUrl, orgId } = event.detail;
+    if (orgId) {
+      window.__CI_CLAUDE_ORG_ID__ = orgId;
+      try { sessionStorage.setItem('ci_claude_org_id', orgId); } catch (e) {}
+    }
+
     const targetUrl = pageUrl || window.location.href;
 
     // Discard payload if it belongs to a different URL than current window
@@ -637,18 +716,21 @@
 
   const ExtractionController = {
     async tryNetworkExtraction() {
-      // 1. Check in-memory intercepted cache with STRICT URL MATCH & freshness (< 5 mins)
+      // 1. Check in-memory intercepted cache with STRICT URL MATCH & freshness
+      const isGenericRootUrl = window.location.pathname === '/' || window.location.pathname === '/app' || window.location.pathname === '/new';
+      const maxFreshnessMs = isGenericRootUrl ? 30000 : 90000;
+
       if (
         lastInterceptedCache.messages &&
         lastInterceptedCache.messages.length > 0 &&
         lastInterceptedCache.pageUrl === window.location.href &&
-        (Date.now() - lastInterceptedCache.timestamp) < 300000
+        (Date.now() - lastInterceptedCache.timestamp) < maxFreshnessMs
       ) {
         console.log(`[Capsule Extractor] Using URL-matched Tier 1 payload for ${window.location.href}`);
         return lastInterceptedCache.messages;
       }
 
-      // 2. Fallback to active API fetch (like ChatGPT endpoints)
+      // 2. Fallback to active API fetch
       if (PLATFORM === 'chatgpt') {
         const match = location.pathname.match(/\/c\/([a-f0-9-]+)/);
         if (match && match[1]) {
@@ -661,88 +743,46 @@
             }
           } catch (e) {}
         }
+      } else if (PLATFORM === 'claude') {
+        const match = location.pathname.match(/\/chat\/([a-f0-9-]+)/);
+        if (match && match[1]) {
+          const chatId = match[1];
+          try {
+            let orgId = window.__CI_CLAUDE_ORG_ID__ || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('ci_claude_org_id') : null);
+            if (!orgId) {
+              const orgResp = await fetch('https://claude.ai/api/organizations', { credentials: 'include' });
+              if (orgResp.ok) {
+                const orgs = await orgResp.json();
+                if (Array.isArray(orgs) && orgs.length > 0 && orgs[0].uuid) {
+                  orgId = orgs[0].uuid;
+                  window.__CI_CLAUDE_ORG_ID__ = orgId;
+                  try { sessionStorage.setItem('ci_claude_org_id', orgId); } catch (e) {}
+                }
+              }
+            }
+            if (orgId) {
+              const chatResp = await fetch(`https://claude.ai/api/organizations/${orgId}/chat_conversations/${chatId}?tree=True&rendering_mode=messages&render_all_tools=true`, { credentials: 'include' });
+              if (chatResp.ok) {
+                const chatData = await chatResp.json();
+                const msgs = ClaudeAdapter.parse(chatData);
+                if (msgs && msgs.length > 0) {
+                  console.log(`[Capsule Extractor] Tier 1 Claude API fetch returned ${msgs.length} messages.`);
+                  return msgs;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[Capsule Extractor] Direct Claude API fetch error:', e);
+          }
+        }
       }
       return null;
     },
 
     async tryTier2ForceLoadAndSelectAll(container) {
-      let mountedCount = 0;
-      let observer = null;
-
-      const getMessageElements = () => {
-        if (PLATFORM === 'chatgpt') {
-          return container.querySelectorAll('[data-message-author-role]');
-        } else if (PLATFORM === 'claude') {
-          return container.querySelectorAll('[class*="message"], [data-testid*="message"]');
-        } else if (PLATFORM === 'gemini') {
-          return container.querySelectorAll('.query-content, message-content, [class*="message"]');
-        } else {
-          return container.querySelectorAll('[data-message-author-role], [class*="message"], [class*="query"]');
-        }
-      };
-
-      mountedCount = getMessageElements().length;
-
-      if (typeof MutationObserver !== 'undefined') {
-        observer = new MutationObserver(() => {
-          mountedCount = getMessageElements().length;
-        });
-        observer.observe(container, { childList: true, subtree: true });
-      }
-
-      const originalScrollTop = container.scrollTop;
-      let scrollAttempts = 0;
-      const maxAttempts = 100;
-      let noNewContentCount = 0;
-      let emptyMutationCount = 0;
-      let lastMountedCount = mountedCount;
-
-      try {
-        while (scrollAttempts < maxAttempts) {
-          const prevScrollTop = container.scrollTop;
-
-          // Aggressive scroll up
-          container.scrollTop = Math.max(0, container.scrollTop - 1500);
-          container.dispatchEvent(new Event('scroll', { bubbles: true }));
-
-          if (mountedCount === lastMountedCount) {
-            emptyMutationCount++;
-          } else {
-            emptyMutationCount = 0;
-            lastMountedCount = mountedCount;
-          }
-
-          if (container.scrollTop === prevScrollTop || container.scrollTop === 0) {
-            noNewContentCount++;
-          } else {
-            noNewContentCount = 0;
-          }
-
-          if (noNewContentCount >= 2 && emptyMutationCount >= 5) {
-            break;
-          }
-
-          await new Promise(resolve => setTimeout(resolve, 50));
-          scrollAttempts++;
-        }
-
-        // Fix Bug 2: read via getSanitizedText to exclude extension UI completely
-        const rawText = getSanitizedText(container);
-        console.log('[Capsule Capture Debug] TIER 2 RAW LENGTH:', rawText.length, 'PREVIEW:', rawText.slice(0, 300));
-        
-        const blocksCount = (rawText.match(/^(You|Gemini|Claude|ChatGPT|User|Assistant|System)\s+said:?/gim) || []).length;
-        const ratio = mountedCount > 0 ? (blocksCount / mountedCount) : 1;
-
-        if (mountedCount > 4 && (ratio < 0.7 || ratio > 1.4)) {
-          console.warn(`[Tier 2 Sanity Check] Mismatch: blocksCount=${blocksCount}, mountedCount=${mountedCount}. Falling through to Tier 3.`);
-          throw new Error('Virtualized trimming detected');
-        }
-
-        return rawText;
-      } finally {
-        if (observer) observer.disconnect();
-        container.scrollTop = originalScrollTop;
-      }
+      // In modern virtualized chat platforms, scrolling directly to top unmounts bottom messages.
+      // Throw immediately to delegate to Tier 3 DOMAccumulator for incremental bottom-to-top collection.
+      throw new Error('Virtualized chat requires incremental accumulation');
     },
 
     async fallbackDOMAccumulation(container) {
@@ -753,7 +793,7 @@
       
       const getMessageKey = (msg) => {
         if (!msg || !msg.content) return null;
-        return `${msg.role}_${msg.content.substring(0, 100)}`;
+        return `${msg.role}_${msg.content.length}_${msg.content.substring(0, 150)}`;
       };
 
       const progressCallback = (count) => {
@@ -815,20 +855,24 @@
         return extractCurrentVisibleMessages(document);
       }
 
-      // Check currently visible messages first (Zero scroll jump)
-      const visibleMsgs = extractCurrentVisibleMessages(container);
-      if (visibleMsgs && visibleMsgs.length > 0) {
-        console.log(`[Capsule Extractor] Captured ${visibleMsgs.length} visible messages directly without page scroll.`);
-        return visibleMsgs;
+      const hasScrollHeadroom = (container.scrollHeight > container.clientHeight + 150) || (container.scrollTop > 100);
+
+      // If the chat fits completely within viewport with no scroll headroom, capture visible directly
+      if (!hasScrollHeadroom) {
+        const visibleMsgs = extractCurrentVisibleMessages(container);
+        if (visibleMsgs && visibleMsgs.length > 0) {
+          console.log(`[Capsule Extractor] Captured ${visibleMsgs.length} visible messages directly (conversation fits completely in view).`);
+          return visibleMsgs;
+        }
       }
 
-      // Tier 2: Force-Load & Select-All (Restores scroll position)
+      // Tier 2: Force-Load & Parse (Restores scroll position)
       try {
-        console.log('[Capsule Extractor] Attempting Tier 2: Force-Load + Select-All.');
-        const tier2Text = await this.tryTier2ForceLoadAndSelectAll(container);
-        if (tier2Text) {
-          console.log('[Capsule Extractor] Using Tier 2: Force-Load + Select-All.');
-          return tier2Text;
+        console.log('[Capsule Extractor] Attempting Tier 2: Force-Load + Parse.');
+        const tier2Msgs = await this.tryTier2ForceLoadAndSelectAll(container);
+        if (tier2Msgs && tier2Msgs.length > 0) {
+          console.log(`[Capsule Extractor] Using Tier 2: Captured ${tier2Msgs.length} messages.`);
+          return tier2Msgs;
         }
       } catch (err) {
         console.warn('[Capsule Extractor] Tier 2 fallback triggered due to:', err.message);
@@ -836,7 +880,17 @@
 
       // Tier 3: Scroll-Accumulate (Last Resort)
       console.log('[Capsule Extractor] Using Tier 3: Scroll-Accumulate.');
-      return await this.fallbackDOMAccumulation(container);
+      const accumulated = await this.fallbackDOMAccumulation(container);
+      if (accumulated && accumulated.length > 0) {
+        return accumulated;
+      }
+
+      // Fallback: whatever is currently visible
+      const fallbackMsgs = extractCurrentVisibleMessages(container);
+      if (fallbackMsgs && fallbackMsgs.length > 0) {
+        return fallbackMsgs;
+      }
+      return null;
     }
   };
 
@@ -868,40 +922,114 @@
           try {
             const role = node.getAttribute('data-message-author-role') || 'unknown';
             const text = getSanitizedText(node);
-            if (text && text.length > 5) messages.push({ role, content: text });
+            if (text && text.length > 2) messages.push({ role, content: text });
           } catch (e) {}
         }
       } else if (PLATFORM === 'claude') {
-        root.querySelectorAll('[class*="message"], [data-testid]').forEach(el => {
+        const turnSelector = [
+          '[data-testid="user-message"]',
+          '.font-user-message',
+          '[data-testid="human-message"]',
+          '[data-testid="message-human"]',
+          'div.font-claude-response',
+          '[data-testid="ai-message"]',
+          '[data-testid="assistant-message"]',
+          '[data-testid="message-assistant"]',
+          'div.font-claude-message'
+        ].join(', ');
+
+        const candidateNodes = Array.from(root.querySelectorAll(turnSelector));
+        // Keep only top-level turn elements (eliminate elements nested inside another candidate turn)
+        const turnNodes = candidateNodes.filter(el => {
+          if (!el || isExtensionElement(el)) return false;
+          return !candidateNodes.some(other => other !== el && other.contains(el));
+        });
+
+        turnNodes.forEach(el => {
           try {
-            if (!el || isExtensionElement(el)) return;
+            const isUser = el.matches('[data-testid="user-message"], .font-user-message, [data-testid="human-message"], [data-testid="message-human"], [class*="font-user"]');
+            const role = isUser ? 'user' : 'assistant';
             const text = getSanitizedText(el);
-            if (!text || text.length < 5) return;
-            const testId = el.getAttribute('data-testid') || '';
-            const role = testId.includes('human') || testId.includes('user') ? 'user' : 'assistant';
-            if (messages.length > 0 && messages[messages.length - 1].content === text) return;
+            if (!text || text.length < 2) return;
+
+            if (messages.length > 0) {
+              const lastMsg = messages[messages.length - 1];
+              if (lastMsg.content === text || (lastMsg.role === role && (lastMsg.content.includes(text) || text.includes(lastMsg.content)))) {
+                return;
+              }
+            }
+
             messages.push({ role, content: text });
           } catch (e) {}
         });
+
+        // Fallback for Claude if custom selectors change:
+        if (messages.length === 0) {
+          const fallbacks = Array.from(root.querySelectorAll('.standard-markdown, .progressive-markdown, div.whitespace-pre-wrap'));
+          const topFallbacks = fallbacks.filter(el => {
+            if (!el || isExtensionElement(el)) return false;
+            return !fallbacks.some(other => other !== el && other.contains(el));
+          });
+          topFallbacks.forEach(el => {
+            try {
+              const text = getSanitizedText(el);
+              if (!text || text.length < 2) return;
+              const isAssistant = el.matches('.standard-markdown, .progressive-markdown') || !!el.closest('.font-claude-response, [class*="claude"]');
+              const role = isAssistant ? 'assistant' : 'user';
+              messages.push({ role, content: text });
+            } catch (e) {}
+          });
+        }
       } else if (PLATFORM === 'gemini') {
-        root.querySelectorAll('model-response, [class*="query-text"], [class*="response-container"]').forEach(el => {
-          try {
-            if (!el || isExtensionElement(el)) return;
-            const text = getSanitizedText(el);
-            if (!text || text.length < 5) return;
-            const tagName = el.tagName?.toLowerCase() || '';
-            const isUser = tagName === 'model-response' ? false : true;
-            messages.push({ role: isUser ? 'user' : 'assistant', content: text });
-          } catch (e) {}
+        const turnSelector = 'user-query, model-response';
+        const candidateNodes = Array.from(root.querySelectorAll(turnSelector));
+        const turnNodes = candidateNodes.filter(el => {
+          if (!el || isExtensionElement(el)) return false;
+          return !candidateNodes.some(other => other !== el && other.contains(el));
         });
+
+        if (turnNodes.length > 0) {
+          turnNodes.forEach(el => {
+            try {
+              const tagName = (el.tagName || '').toLowerCase();
+              const isUser = tagName === 'user-query';
+              const role = isUser ? 'user' : 'assistant';
+              const text = getSanitizedText(el);
+              if (!text || text.length < 2) return;
+              messages.push({ role, content: text });
+            } catch (e) {}
+          });
+        } else {
+          // Fallback for Gemini
+          const fallbackSel = '[class*="query-text"], .query-content, [class*="response-container"], message-content';
+          const fallbacks = Array.from(root.querySelectorAll(fallbackSel));
+          const topFallbacks = fallbacks.filter(el => {
+            if (!el || isExtensionElement(el)) return false;
+            return !fallbacks.some(other => other !== el && other.contains(el));
+          });
+          topFallbacks.forEach(el => {
+            try {
+              const text = getSanitizedText(el);
+              if (!text || text.length < 2) return;
+              const isUser = el.matches('[class*="query-text"], .query-content');
+              const role = isUser ? 'user' : 'assistant';
+              messages.push({ role, content: text });
+            } catch (e) {}
+          });
+        }
       } else if (PLATFORM === 'deepseek') {
-        root.querySelectorAll('.ds-message').forEach(el => {
+        const dsMessages = Array.from(root.querySelectorAll('.ds-message'));
+        const turnNodes = dsMessages.length > 0 ? dsMessages : Array.from(root.querySelectorAll('div[class*="message-item"]'));
+        const uniqueTurns = turnNodes.filter(el => {
+          if (!el || isExtensionElement(el)) return false;
+          return !turnNodes.some(other => other !== el && other.contains(el));
+        });
+
+        uniqueTurns.forEach(el => {
           try {
-            if (!el || isExtensionElement(el)) return;
-            const isAssistant = el.querySelector('.ds-markdown') !== null;
-            if (isAssistant) {
-              const markdownEl = el.querySelector('.ds-markdown');
-              let text = markdownEl ? getSanitizedText(markdownEl) : '';
+            const markdownEl = el.querySelector('.ds-markdown');
+            if (markdownEl) {
+              let text = getSanitizedText(markdownEl);
               if (text) {
                 const thinkingEl = el.querySelector('[class*="think"], [class*="reasoning"], .e1675d8b');
                 if (thinkingEl && thinkingEl !== markdownEl) {
@@ -940,47 +1068,77 @@
   }
 
   function findScrollContainer() {
-    let selectors = [];
-    if (PLATFORM === 'chatgpt') {
-      selectors = ['div[class*="react-scroll-to-bottom"]', 'main div.overflow-y-auto', 'main'];
-    } else if (PLATFORM === 'claude') {
-      selectors = ['div.overflow-y-auto', 'main'];
-    } else if (PLATFORM === 'gemini') {
-      selectors = ['gai-slotted-scroll-container', '.chat-history', 'div.overflow-y-auto', 'main'];
-    } else if (PLATFORM === 'deepseek') {
-      selectors = ['div[class*="message-list"]', 'div.overflow-y-auto', 'main'];
-    } else {
-      selectors = ['div.overflow-y-auto', 'main'];
-    }
+    // 1. PRIMARY & MOST ACCURATE: Find an actual message element and find its scrollable parent container
+    const messageSelectors = [
+      '[data-message-author-role]',
+      '.font-user-message',
+      '.font-claude-response',
+      '.font-claude-message',
+      '[data-testid*="human"]',
+      '[data-testid*="assistant"]',
+      'user-query',
+      'model-response',
+      '[class*="query-text"]',
+      '.ds-message',
+      '.standard-markdown'
+    ].join(', ');
 
-    for (const selector of selectors) {
-      const el = document.querySelector(selector);
-      if (el && el.scrollHeight > el.clientHeight) {
-        return el;
-      }
-    }
-
-    const messageNode = document.querySelector('[data-message-author-role], [class*="message"], [class*="query-text"], .ds-message, [role="log"]');
-    if (messageNode) {
-      let parent = messageNode.parentElement;
-      while (parent && parent !== document.body) {
-        const style = window.getComputedStyle(parent);
-        const overflowY = style.overflowY || style.overflow;
-        if ((overflowY.includes('auto') || overflowY.includes('scroll')) && parent.scrollHeight > parent.clientHeight) {
-          return parent;
+    const msgNodes = document.querySelectorAll(messageSelectors);
+    for (const node of msgNodes) {
+      if (isExtensionElement(node)) continue;
+      let parent = node.parentElement;
+      while (parent && parent !== document.body && parent !== document.documentElement) {
+        // Exclude sidebars and navbars completely
+        const isNavOrSidebar = parent.matches && (
+          parent.matches('nav, aside, [role="navigation"], [class*="sidebar" i], [id*="sidebar" i]') ||
+          parent.closest('nav, aside, [role="navigation"], [class*="sidebar" i], [id*="sidebar" i]')
+        );
+        if (!isNavOrSidebar) {
+          const style = window.getComputedStyle(parent);
+          const overflowY = style.overflowY || style.overflow;
+          if ((overflowY.includes('auto') || overflowY.includes('scroll')) && parent.scrollHeight > parent.clientHeight) {
+            return parent;
+          }
         }
         parent = parent.parentElement;
       }
     }
+
+    // 2. Secondary fallback: Platform-specific containers scoped strictly within main
+    const mainEl = document.querySelector('main, [role="main"]');
+    if (mainEl) {
+      let platformSelectors = [];
+      if (PLATFORM === 'chatgpt') {
+        platformSelectors = ['div[class*="react-scroll-to-bottom"]', 'div.overflow-y-auto'];
+      } else if (PLATFORM === 'claude') {
+        platformSelectors = ['div.overflow-y-auto', 'div[class*="scroll"]'];
+      } else if (PLATFORM === 'gemini') {
+        platformSelectors = ['gai-slotted-scroll-container', '.chat-history', 'div.overflow-y-auto'];
+      } else if (PLATFORM === 'deepseek') {
+        platformSelectors = ['div[class*="message-list"]', 'div.overflow-y-auto'];
+      } else {
+        platformSelectors = ['div.overflow-y-auto'];
+      }
+
+      for (const sel of platformSelectors) {
+        const el = mainEl.querySelector(sel);
+        if (el && el.scrollHeight > el.clientHeight) {
+          return el;
+        }
+      }
+      if (mainEl.scrollHeight > mainEl.clientHeight) return mainEl;
+    }
+
     return document.querySelector('main') || document.documentElement || document.body;
   }
 
   // ============================================================
   // Part 19: Conversation Fingerprinting & Deduplication Cache
   // ============================================================
-  function getConversationFingerprint(platform, conversationUrl, visibleMessageCount, lastMessageSnippet) {
-    const cleanSnippet = (lastMessageSnippet || '').substring(0, 80).replace(/\s+/g, ' ').trim();
-    return `${platform}::${conversationUrl}::${visibleMessageCount}::${cleanSnippet}`;
+  function getConversationFingerprint(platform, conversationUrl, visibleMessageCount, lastMessageSnippet, firstMessageSnippet = '') {
+    const cleanLast = (lastMessageSnippet || '').substring(0, 80).replace(/\s+/g, ' ').trim();
+    const cleanFirst = (firstMessageSnippet || '').substring(0, 80).replace(/\s+/g, ' ').trim();
+    return `${platform}::${conversationUrl}::${visibleMessageCount}::${cleanFirst}::${cleanLast}`;
   }
 
   async function getCachedCapture(conversationUrl, fingerprint) {
@@ -990,6 +1148,19 @@
       const entry = cache[conversationUrl];
       // Only treat as cache hit if it was generated by the AI backend
       if (entry && entry.fingerprint === fingerprint && entry.servedBy) {
+        const content = entry.compressedContent || '';
+        // Invalidate trivial or failed extractions
+        const isCorruptOrTrivial = (
+          content.length < 80 ||
+          (content.includes('Not discussed.') && content.includes('No decisions finalized yet.'))
+        );
+        if (isCorruptOrTrivial) {
+          console.log('[Capsule Cache] Cached capsule has placeholder/empty extraction markers — purging cache for fresh analysis.');
+          delete cache[conversationUrl];
+          await chrome.storage.local.set({ captureCache: cache });
+          return null;
+        }
+
         console.log('[Capsule Cache] Fingerprint match! Reusing cached AI capsule for:', conversationUrl);
         return entry;
       }
@@ -1002,6 +1173,13 @@
   async function setCachedCapture(conversationUrl, fingerprint, captureData) {
     // Only cache if the capsule was served by the AI backend
     if (!captureData.servedBy) return;
+
+    // Do NOT cache trivial or failed extractions
+    const content = captureData.compressedContent || '';
+    if (content.length < 80 || (content.includes('Not discussed.') && content.includes('No decisions finalized yet.'))) {
+      console.log('[Capsule Cache] Skipping cache for trivial or incomplete output.');
+      return;
+    }
 
     try {
       const res = await chrome.storage.local.get(['captureCache']);
@@ -1064,13 +1242,7 @@
     }
 
     if (!messagesOrText || messagesOrText.length === 0) {
-      const main = document.querySelector('main, [role="main"], .conversation');
-      if (main) {
-        const text = getSanitizedText(main);
-        if (text && text.length > 20) {
-          return { title: document.title || 'Conversation', content: text.substring(0, 100000), rawContent: text, compressedContent: text, messageCount: 1, platform: PLATFORM };
-        }
-      }
+      console.warn('[Capsule Extractor] No conversation messages detected on page.');
       return null;
     }
 
@@ -1098,16 +1270,20 @@
     console.log(`[Capsule Capture Assertion] Page URL: ${window.location.href} | Extracted preview: "${rawFormatted.slice(0, 120).replace(/\n/g, ' ')}"`);
 
     // Part 19: Check deduplication cache before calling AI / local compressor
+    let firstMessageSnippet = '';
     let lastMessageSnippet = '';
     if (Array.isArray(messagesOrText) && messagesOrText.length > 0) {
+      const firstMsg = messagesOrText[0];
+      firstMessageSnippet = firstMsg ? (firstMsg.content || '') : '';
       const lastMsg = messagesOrText[messagesOrText.length - 1];
       lastMessageSnippet = lastMsg ? (lastMsg.content || '') : '';
     } else if (typeof rawFormatted === 'string') {
+      firstMessageSnippet = rawFormatted.slice(0, 150);
       lastMessageSnippet = rawFormatted.slice(-150);
     }
 
     const conversationUrl = window.location.href.split('#')[0];
-    const currentFingerprint = getConversationFingerprint(PLATFORM, conversationUrl, messageCount, lastMessageSnippet);
+    const currentFingerprint = getConversationFingerprint(PLATFORM, conversationUrl, messageCount, lastMessageSnippet, firstMessageSnippet);
 
     const cached = await getCachedCapture(conversationUrl, currentFingerprint);
     if (cached) {
@@ -1133,7 +1309,7 @@
 
     // Try AI Compression Backend via Edge Function first
     let aiRes = null;
-    console.time('[Capsule Capture Timing] AI Edge Function Compression');
+    const aiStartTime = performance.now();
     try {
       if (typeof CapsuleStorage !== 'undefined' && CapsuleStorage.requestAICompression) {
         console.log('[Capsule AI Path] CapsuleStorage.requestAICompression found, calling Edge Function...');
@@ -1146,7 +1322,8 @@
     } catch (e) {
       console.warn('[Capsule AI Path] AI Backend compression error, falling back to local engine:', e);
     } finally {
-      console.timeEnd('[Capsule Capture Timing] AI Edge Function Compression');
+      const aiDuration = (performance.now() - aiStartTime).toFixed(1);
+      console.log(`[Capsule Capture Timing] AI Edge Function Compression took ${aiDuration}ms`);
     }
 
     if (aiRes && aiRes.capsule) {
@@ -1195,7 +1372,7 @@
     } else {
       // Handle AI Backend Errors / Limits / Logged out fallback
       if (aiRes?.error === "LIMIT_REACHED") {
-        setTimeout(() => showLimitReachedModal(aiRes.monthlyLimit || 30), 500);
+        setTimeout(() => showLimitReachedModal(aiRes.monthlyLimit || 20), 500);
       } else if (aiRes?.error === "SESSION_EXPIRED") {
         // Part 16: Session was present but expired, and refresh failed — user must re-login
         console.warn('[Capsule AI Path] Session expired and refresh failed. Showing sign-in nudge.');
@@ -1806,7 +1983,7 @@
   // ============================================================
   // LIMIT REACHED MODAL (Mailto Pro Lead Capture - Part 7)
   // ============================================================
-  function showLimitReachedModal(limitCount = 30) {
+  function showLimitReachedModal(limitCount = 20) {
     document.querySelector('.capsule-limit-overlay')?.remove();
 
     const supportEmail = 'capsuleinfinity.support@gmail.com';

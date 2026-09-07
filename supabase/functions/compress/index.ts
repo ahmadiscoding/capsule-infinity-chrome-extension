@@ -15,7 +15,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
 
-const MONTHLY_FREE_LIMIT = 30;
+const MONTHLY_FREE_LIMIT = 20;
 const GEMINI_DAILY_CAP = 500;
 const GROQ_DAILY_CAP = 2000;
 
@@ -166,24 +166,25 @@ async function getLiveGroqModels(): Promise<string[]> {
   return STATIC_GROQ_FALLBACKS;
 }
 
-const SYSTEM_PROMPT = `You are the compression engine for a context-capsule browser extension. You will receive a raw AI chat transcript. Produce a compact "capsule" that lets another AI instantly resume this conversation with full context.
+const SYSTEM_PROMPT = `You are the compression engine for a context-capsule browser extension. You will receive a raw AI chat transcript. Extract ONLY information that is explicitly present in the transcript — never infer, assume, or fabricate details.
 
 Output ONLY valid JSON matching this schema, nothing else:
 
 {
-  "user_intent": "<1-2 full sentences in plain prose: what is the user ultimately trying to accomplish>",
-  "key_decisions": "<1-3 full sentences in plain prose: concrete decisions made so far, written as connected sentences, not a list>",
-  "constraints": "<1-2 full sentences in plain prose: hard requirements or things to avoid. Omit this field entirely if none exist>",
-  "technicalities": "<2-4 full sentences in plain prose: tools, versions, technical facts, and details worth remembering>"
+  "user_intent": "<1-2 sentences: what the user explicitly asked for or is trying to do, using their own words/topic>",
+  "key_decisions": "<1-3 sentences: specific decisions, conclusions, or solutions that were explicitly stated in the conversation. If no decisions were made, write 'No decisions finalized yet.'>",
+  "constraints": "<1-2 sentences: requirements or limitations explicitly mentioned. OMIT this field entirely if none were stated>",
+  "technicalities": "<2-4 sentences: specific tools, technologies, filenames, code snippets, versions, URLs, or technical details explicitly mentioned in the chat>"
 }
 
-Rules:
-- Write real sentences, not sentence fragments or bullet-style noun phrases.
-- Do not restate the user's literal questions — synthesize what was concluded or decided.
+CRITICAL Rules:
+- ONLY include information that appears verbatim or is directly stated in the transcript. Do NOT add context, background knowledge, or assumptions.
+- If a field cannot be filled with information from the transcript, either omit the field or write "Not discussed."
+- Use the same terminology the user and assistant used in the conversation — do not rephrase into different technical terms.
 - Never include pleasantries, apologies, or filler from the original chat.
 - Omit "constraints" entirely if the chat has no explicit constraints — do not invent one.
-- If the chat covers multiple unrelated topics, focus on the most recent/active topic; mention earlier topics only briefly within "technicalities" if relevant.
-- Target 80–150 words total.`;
+- If the transcript is very short (under 5 messages), keep the capsule proportionally brief.
+- Target 60–150 words total depending on conversation length.`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -244,7 +245,7 @@ async function callGeminiWithModel(transcript: string, model: string): Promise<a
         ],
         generationConfig: {
           response_mime_type: "application/json",
-          temperature: 0.2
+          temperature: 0.1
         }
       })
     });
@@ -304,7 +305,7 @@ async function callGroqWithModel(transcript: string, model: string): Promise<any
       body: JSON.stringify({
         model: model,
         response_format: { type: "json_object" },
-        temperature: 0.2,
+        temperature: 0.1,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: transcript }

@@ -37,10 +37,16 @@
         // 2. Claude Interception
         else if (url.includes('chat_conversations/') && !url.includes('/page')) {
           try {
+            const orgMatch = url.match(/\/organizations\/([a-f0-9-]+)\//);
+            const orgId = orgMatch ? orgMatch[1] : null;
+            if (orgId) {
+              window.__CI_CLAUDE_ORG_ID__ = orgId;
+              try { sessionStorage.setItem('ci_claude_org_id', orgId); } catch (e) {}
+            }
             const clone = response.clone();
             const data = await clone.json();
             window.dispatchEvent(new CustomEvent('ci-network-payload', {
-              detail: { platform: 'claude', data, pageUrl: window.location.href, timestamp: Date.now() }
+              detail: { platform: 'claude', data, pageUrl: window.location.href, orgId, timestamp: Date.now() }
             }));
           } catch (e) {
             console.warn('[Interceptor] Failed to parse Claude response:', e);

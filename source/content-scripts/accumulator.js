@@ -8,23 +8,46 @@ const DOMAccumulator = {
    * Safe incremental scroll-walker with MutationObserver and adaptive steps
    */
   async accumulate(container, extractCurrentVisibleMessages, getMessageKey, onProgress) {
-    const accumulatedMap = new Map();
+    let orderedList = [];
     let observer = null;
     let mutationsOccurred = false;
 
-    // Helper to add messages to the map
+    // Helper to merge newly scrolled messages (from higher up) into the accumulated list in chronological order
+    const mergeBatch = (newBatch, accumulated) => {
+      if (!accumulated || accumulated.length === 0) return newBatch || [];
+      if (!newBatch || newBatch.length === 0) return accumulated;
+
+      // Find overlap where tail of newBatch matches head of accumulated
+      const maxOverlap = Math.min(newBatch.length, accumulated.length);
+      for (let len = maxOverlap; len > 0; len--) {
+        let match = true;
+        for (let i = 0; i < len; i++) {
+          const bKey = getMessageKey(newBatch[newBatch.length - len + i]);
+          const aKey = getMessageKey(accumulated[i]);
+          if (bKey !== aKey) {
+            match = false;
+            break;
+          }
+        }
+        if (match) {
+          return [...newBatch.slice(0, newBatch.length - len), ...accumulated];
+        }
+      }
+
+      // Deduplicating fallback
+      const existingKeys = new Set(accumulated.map(m => getMessageKey(m)));
+      const uniqueNew = newBatch.filter(m => !existingKeys.has(getMessageKey(m)));
+      return [...uniqueNew, ...accumulated];
+    };
+
     const ingestVisible = () => {
       const current = extractCurrentVisibleMessages();
-      let newCount = 0;
-      current.forEach(msg => {
-        const key = getMessageKey(msg);
-        if (key && !accumulatedMap.has(key)) {
-          accumulatedMap.set(key, msg);
-          newCount++;
-        }
-      });
+      if (!current || current.length === 0) return 0;
+      const prevLen = orderedList.length;
+      orderedList = mergeBatch(current, orderedList);
+      const newCount = orderedList.length - prevLen;
       if (newCount > 0 && typeof onProgress === 'function') {
-        onProgress(accumulatedMap.size);
+        onProgress(orderedList.length);
       }
       return newCount;
     };
@@ -41,7 +64,27 @@ const DOMAccumulator = {
       observer.observe(container, { childList: true, subtree: true });
     }
 
-    const originalScrollTop = container.scrollTop;
+    const getScrollTop = (el) => {
+      if (!el || el === document.documentElement || el === document.body || el === window) {
+        return window.scrollY || document.documentElement?.scrollTop || document.body?.scrollTop || 0;
+      }
+      return el.scrollTop || 0;
+    };
+
+    const setScrollTop = (el, val) => {
+      const top = Math.max(0, val);
+      if (!el || el === document.documentElement || el === document.body || el === window) {
+        window.scrollTo({ top, behavior: 'instant' });
+        if (document.documentElement) document.documentElement.scrollTop = top;
+        if (document.body) document.body.scrollTop = top;
+      } else {
+        el.scrollTop = top;
+      }
+      el?.dispatchEvent?.(new Event('scroll', { bubbles: true }));
+      window.dispatchEvent(new Event('scroll'));
+    };
+
+    const originalScrollTop = getScrollTop(container);
     
     // Adaptive parameters
     let stepSize = 500;
@@ -53,12 +96,12 @@ const DOMAccumulator = {
     let noNewContentCount = 0;
     let stallCount = 0;
 
-    let lastScrollTop = container.scrollTop;
-    let lastAccumulatedSize = accumulatedMap.size;
+    let lastScrollTop = originalScrollTop;
+    let lastAccumulatedSize = orderedList.length;
 
     try {
       while (scrollAttempts < maxAttempts) {
-        const prevScrollTop = container.scrollTop;
+        const prevScrollTop = getScrollTop(container);
         mutationsOccurred = false;
         
         ingestVisible();
@@ -75,11 +118,11 @@ const DOMAccumulator = {
         }
 
         // Step scroll position upwards
-        container.scrollTop = Math.max(0, container.scrollTop - stepSize);
-        container.dispatchEvent(new Event('scroll', { bubbles: true }));
+        setScrollTop(container, prevScrollTop - stepSize);
+        const currentScrollTop = getScrollTop(container);
 
         // Detect if scroll bounds are reached
-        if (container.scrollTop === prevScrollTop || container.scrollTop === 0) {
+        if (currentScrollTop === prevScrollTop || currentScrollTop === 0) {
           noNewContentCount++;
         } else {
           noNewContentCount = 0;
@@ -98,12 +141,12 @@ const DOMAccumulator = {
         }
 
         // Stall check: position and count unchanged
-        if (container.scrollTop === lastScrollTop && accumulatedMap.size === lastAccumulatedSize) {
+        if (currentScrollTop === lastScrollTop && orderedList.length === lastAccumulatedSize) {
           stallCount++;
         } else {
           stallCount = 0;
-          lastScrollTop = container.scrollTop;
-          lastAccumulatedSize = accumulatedMap.size;
+          lastScrollTop = currentScrollTop;
+          lastAccumulatedSize = orderedList.length;
         }
 
         if (stallCount >= 5) {
@@ -117,7 +160,7 @@ const DOMAccumulator = {
       }
 
       // Gap detection: check if roles don't alternate (potential missing messages)
-      const list = Array.from(accumulatedMap.values());
+      const list = orderedList;
       let gapFound = false;
       for (let i = 0; i < list.length - 1; i++) {
         if (list[i].role === list[i + 1].role) {
@@ -127,16 +170,15 @@ const DOMAccumulator = {
       }
 
       // If gap found, scroll back to middle of chat to attempt re-capture
-      if (gapFound && container.scrollHeight > 1000) {
+      const scrollHeight = container.scrollHeight || document.documentElement?.scrollHeight || 0;
+      if (gapFound && scrollHeight > 1000) {
         console.log('[Tier 3] Gap detected. Performing re-capture pass.');
-        container.scrollTop = Math.floor(container.scrollHeight / 2);
-        container.dispatchEvent(new Event('scroll', { bubbles: true }));
+        setScrollTop(container, Math.floor(scrollHeight / 2));
         await new Promise(resolve => setTimeout(resolve, 300));
         ingestVisible();
         
         // Scroll back to top
-        container.scrollTop = 0;
-        container.dispatchEvent(new Event('scroll', { bubbles: true }));
+        setScrollTop(container, 0);
         await new Promise(resolve => setTimeout(resolve, 200));
         ingestVisible();
       }
@@ -145,10 +187,10 @@ const DOMAccumulator = {
       if (observer) {
         observer.disconnect();
       }
-      container.scrollTop = originalScrollTop;
+      setScrollTop(container, originalScrollTop);
     }
 
-    return Array.from(accumulatedMap.values());
+    return orderedList;
   }
 };
 
