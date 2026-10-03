@@ -5,7 +5,18 @@
 (function() {
   const originalFetch = window.fetch;
   window.fetch = function(...args) {
-    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+    let url = '';
+    if (typeof args[0] === 'string') {
+      url = args[0];
+    } else if (args[0] instanceof URL) {
+      url = args[0].href;
+    } else if (args[0] && typeof args[0] === 'object' && args[0].url) {
+      url = args[0].url;
+    } else if (args[0] && typeof args[0] === 'object' && args[0].href) {
+      url = args[0].href;
+    } else if (args[0]) {
+      url = String(args[0]);
+    }
 
     const isTarget = url && (
       url.includes('backend-api/conversation/') ||

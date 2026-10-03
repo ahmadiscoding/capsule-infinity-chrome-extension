@@ -49,6 +49,8 @@
   const DIALOGUE_SELECTORS = {
     chatgpt: [
       '#prompt-textarea',
+      '#mobile-composer-prompt',
+      'textarea[aria-label*="ChatGPT" i]',
       '[contenteditable="true"][data-placeholder]',
       'div.ProseMirror',
       '[id*="prompt"]',
@@ -732,16 +734,44 @@
 
       // 2. Fallback to active API fetch
       if (PLATFORM === 'chatgpt') {
-        const match = location.pathname.match(/\/c\/([a-f0-9-]+)/);
+        const match = location.pathname.match(/\/(?:c|uc)\/([a-f0-9-]+)/i);
         if (match && match[1]) {
+          const chatId = match[1];
           try {
-            const resp = await fetch(`https://chatgpt.com/backend-api/conversation/${match[1]}`, { credentials: 'include' });
+            let accessToken = null;
+            try {
+              const sessionResp = await fetch('/api/auth/session', { credentials: 'include' });
+              if (sessionResp.ok) {
+                const sessionData = await sessionResp.json();
+                accessToken = sessionData?.accessToken || null;
+              } else {
+                console.warn('[Capsule Extractor] ChatGPT /api/auth/session status:', sessionResp.status);
+              }
+            } catch (sessErr) {
+              console.warn('[Capsule Extractor] Failed to fetch ChatGPT session:', sessErr);
+            }
+
+            const didMatch = document.cookie.match(/(?:^|;\s*)oai-did=([^;]+)/);
+            const oaiDid = didMatch ? decodeURIComponent(didMatch[1]) : null;
+
+            const headers = {};
+            if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+            if (oaiDid) headers['oai-device-id'] = oaiDid;
+
+            const resp = await fetch(`/backend-api/conversation/${chatId}`, {
+              credentials: 'include',
+              headers
+            });
             if (resp.ok) {
               const data = await resp.json();
               const msgs = ChatGPTAdapter.parse(data);
               if (msgs && msgs.length > 0) return msgs;
+            } else {
+              console.warn(`[Capsule Extractor] ChatGPT conversation API fetch returned status: ${resp.status}`);
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn('[Capsule Extractor] ChatGPT API fetch error:', e);
+          }
         }
       } else if (PLATFORM === 'claude') {
         const match = location.pathname.match(/\/chat\/([a-f0-9-]+)/);
@@ -904,6 +934,7 @@
 
     try {
       if (PLATFORM === 'chatgpt') {
+        // Strategy 1: Legacy/standard data-message-author-role TreeWalker
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
           acceptNode(node) {
             try {
@@ -924,6 +955,80 @@
             const text = getSanitizedText(node);
             if (text && text.length > 2) messages.push({ role, content: text });
           } catch (e) {}
+        }
+
+        // Strategy 2: Turn elements and article tags
+        if (messages.length === 0) {
+          const turnSelectors = [
+            '[data-testid^="conversation-turn"]',
+            'article'
+          ].join(', ');
+          const candidateNodes = Array.from(root.querySelectorAll(turnSelectors));
+          const turnNodes = candidateNodes.filter(el => {
+            if (!el || isExtensionElement(el)) return false;
+            return !candidateNodes.some(other => other !== el && other.contains(el));
+          });
+
+          turnNodes.forEach(el => {
+            try {
+              let role = 'user';
+              const roleAttr = el.getAttribute('data-message-author-role');
+              if (roleAttr) {
+                role = roleAttr;
+              } else {
+                const headingText = (el.innerText || '');
+                if (/ChatGPT\s+said/i.test(headingText)) {
+                  role = 'assistant';
+                } else if (/You\s+said/i.test(headingText)) {
+                  role = 'user';
+                } else if (el.querySelector('[data-testid*="assistant"], [class*="agent"], [class*="assistant"]')) {
+                  role = 'assistant';
+                }
+              }
+              const text = getSanitizedText(el);
+              if (text && text.length > 2) {
+                messages.push({ role, content: text });
+              }
+            } catch (e) {}
+          });
+        }
+
+        // Strategy 3: Live observed accessible conversation region and heading markers ("You said:" / "ChatGPT said:")
+        if (messages.length === 0) {
+          const conversationRegion = root.querySelector('[aria-label="Conversation"], [role="region"][aria-label*="Conversation"]') || root;
+          const speakerWalker = document.createTreeWalker(conversationRegion, NodeFilter.SHOW_ELEMENT, {
+            acceptNode(n) {
+              if (isExtensionElement(n)) return NodeFilter.FILTER_REJECT;
+              const t = (n.innerText || '').trim();
+              if (/^(You|ChatGPT)\s+said:?$/i.test(t)) {
+                return NodeFilter.FILTER_ACCEPT;
+              }
+              return NodeFilter.FILTER_SKIP;
+            }
+          });
+          const speakerNodes = [];
+          let sNode;
+          while (sNode = speakerWalker.nextNode()) {
+            speakerNodes.push(sNode);
+          }
+
+          if (speakerNodes.length > 0) {
+            speakerNodes.forEach(sEl => {
+              try {
+                const isChatGPT = /ChatGPT/i.test(sEl.innerText || '');
+                const role = isChatGPT ? 'assistant' : 'user';
+                const turnContainer = sEl.closest('article, [data-testid^="conversation-turn"]') || sEl.parentElement;
+                if (turnContainer) {
+                  const text = getSanitizedText(turnContainer);
+                  if (text && text.length > 2) {
+                    if (messages.length === 0 || messages[messages.length - 1].content !== text) {
+                      messages.push({ role, content: text });
+                    }
+                  }
+                }
+              } catch (e) {}
+            });
+          }
         }
       } else if (PLATFORM === 'claude') {
         const turnSelector = [
@@ -1071,6 +1176,10 @@
     // 1. PRIMARY & MOST ACCURATE: Find an actual message element and find its scrollable parent container
     const messageSelectors = [
       '[data-message-author-role]',
+      '[data-testid^="conversation-turn"]',
+      'article',
+      '[aria-label="Conversation"]',
+      '[role="region"][aria-label*="Conversation"]',
       '.font-user-message',
       '.font-claude-response',
       '.font-claude-message',
@@ -1086,6 +1195,13 @@
     const msgNodes = document.querySelectorAll(messageSelectors);
     for (const node of msgNodes) {
       if (isExtensionElement(node)) continue;
+      if (node.scrollHeight > node.clientHeight && node.clientHeight > 100) {
+        const style = window.getComputedStyle(node);
+        const overflowY = style.overflowY || style.overflow;
+        if (overflowY.includes('auto') || overflowY.includes('scroll') || node.getAttribute('scrollable') === 'true') {
+          return node;
+        }
+      }
       let parent = node.parentElement;
       while (parent && parent !== document.body && parent !== document.documentElement) {
         // Exclude sidebars and navbars completely
@@ -1104,12 +1220,12 @@
       }
     }
 
-    // 2. Secondary fallback: Platform-specific containers scoped strictly within main
-    const mainEl = document.querySelector('main, [role="main"]');
+    // 2. Secondary fallback: Platform-specific containers scoped strictly within main or conversation region
+    const mainEl = document.querySelector('main, [role="main"], [aria-label="Conversation"], [role="region"][aria-label*="Conversation"]');
     if (mainEl) {
       let platformSelectors = [];
       if (PLATFORM === 'chatgpt') {
-        platformSelectors = ['div[class*="react-scroll-to-bottom"]', 'div.overflow-y-auto'];
+        platformSelectors = ['div[aria-label="Conversation"]', '[role="region"][aria-label*="Conversation"]', 'div[class*="react-scroll-to-bottom"]', 'div.overflow-y-auto'];
       } else if (PLATFORM === 'claude') {
         platformSelectors = ['div.overflow-y-auto', 'div[class*="scroll"]'];
       } else if (PLATFORM === 'gemini') {
@@ -1121,7 +1237,7 @@
       }
 
       for (const sel of platformSelectors) {
-        const el = mainEl.querySelector(sel);
+        const el = mainEl.matches && mainEl.matches(sel) ? mainEl : mainEl.querySelector(sel);
         if (el && el.scrollHeight > el.clientHeight) {
           return el;
         }
@@ -2109,7 +2225,7 @@
       }
 
       // Priority 2: Long session (>20 messages)
-      const currentMessagesCount = (document.querySelectorAll('[data-message-author-role], [class*="message"], .ds-message, [role="log"] > div').length);
+      const currentMessagesCount = (document.querySelectorAll('[data-message-author-role], [data-testid^="conversation-turn"], article, [aria-label="Conversation"] [role="region"], [class*="message"], .ds-message, [role="log"] > div').length);
       if (currentMessagesCount >= 20 && !shownBanners['trigger2']) {
         shownBanners['trigger2'] = true;
         await chrome.storage.local.set({ shownBannersToday: shownBanners });
