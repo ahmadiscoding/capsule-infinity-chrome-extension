@@ -6,10 +6,37 @@
   <h3>Enhance Your Browser. Extend Your World.</h3>
   <p>Capture full, complex AI chat conversations as portable, reusable context units (Capsules) and sync them across devices via Supabase Cloud.</p>
 
+  [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-Capsule_Infinity-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/capsule-infinity/ilbjnlkgdmkmeodhjhgpniiomfcpklai)
+
+  <br/>
+
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-  [![Manifest Version: 3](https://img.shields.io/badge/Manifest-V3-purple.svg)](manifest.json)
+  [![Manifest Version: 3](https://img.shields.io/badge/Manifest-V3-purple.svg)](source/manifest.json)
   [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+  [![Users](https://img.shields.io/badge/Users-100%2B-blue.svg)](https://chromewebstore.google.com/detail/capsule-infinity/ilbjnlkgdmkmeodhjhgpniiomfcpklai)
 </div>
+
+---
+
+## 📥 Installation
+
+### 🚀 Chrome Web Store (Recommended)
+Install the official release directly from the Google Chrome Web Store to get automatic background updates:
+
+👉 [**Add Capsule Infinity to Chrome (Chrome Web Store)**](https://chromewebstore.google.com/detail/capsule-infinity/ilbjnlkgdmkmeodhjhgpniiomfcpklai)
+
+---
+
+### 💻 Developer Mode (Load Unpacked)
+To run and test the latest code directly from source:
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/ahmadiscoding/capsule-infinity-chrome-extension.git
+   ```
+2. In Google Chrome, navigate to `chrome://extensions/`.
+3. Enable **Developer mode** toggle in the top-right corner.
+4. Click **Load unpacked** and select the [`source/`](source/) folder.
+
 
 ---
 
