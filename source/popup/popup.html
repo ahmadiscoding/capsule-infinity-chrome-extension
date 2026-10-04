@@ -30,11 +30,16 @@
     }
     .header-left { display: flex; align-items: center; gap: 10px; }
     .logo {
-      width: 28px; height: 28px;
-      background: linear-gradient(135deg, #6366f1, #a855f7);
-      border-radius: 8px;
+      height: 24px; width: auto;
+      background: transparent;
       display: flex; align-items: center; justify-content: center;
-      font-size: 15px;
+      flex-shrink: 0;
+    }
+    .logo img {
+      height: 24px; width: auto;
+      max-width: 100%;
+      object-fit: contain; display: block;
+      flex-shrink: 0;
     }
     .header-title { font-size: 15px; font-weight: 700; letter-spacing: -0.3px; }
     .header-badge {
@@ -61,12 +66,15 @@
       display: flex; flex-direction: column; align-items: center;
     }
     .login-logo {
-      width: 52px; height: 52px;
-      background: linear-gradient(135deg, #6366f1, #a855f7);
-      border-radius: 14px;
+      width: 48px; height: 48px;
+      background: transparent;
       display: flex; align-items: center; justify-content: center;
-      font-size: 26px; margin-bottom: 16px;
-      box-shadow: 0 8px 24px rgba(99,102,241,0.3);
+      margin-bottom: 16px;
+    }
+    .login-logo img {
+      width: 40px; height: auto;
+      max-width: 100%; max-height: 100%;
+      object-fit: contain; display: block;
     }
     .login-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
     .login-subtitle { font-size: 13px; color: #64748b; margin-bottom: 24px; }
@@ -250,7 +258,19 @@
       text-align: center; padding: 32px 16px;
       color: #475569;
     }
-    .empty-state-icon { font-size: 32px; margin-bottom: 8px; opacity: 0.5; }
+    .empty-state-icon {
+      margin-bottom: 8px; opacity: 0.5;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .empty-state-icon img {
+      width: 44px; height: auto;
+      max-width: 100%; max-height: 100%;
+      object-fit: contain; display: block;
+    }
+    .logo img, .login-logo img, .empty-state-icon img {
+      max-width: 100%;
+      max-height: 100%;
+    }
     .empty-state-text { font-size: 12px; line-height: 1.6; }
 
     /* Spinner */
