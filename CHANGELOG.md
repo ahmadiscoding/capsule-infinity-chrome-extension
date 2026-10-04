@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3] - 2026-10-04
+### Changed
+* New logo and icons across toolbar, popup, sidebar, injected buttons, and animations.
+
 ## [1.0.2] - 2026-10-03
 ### Fixed
 * ChatGPT extraction: Added support for URL and Request objects in network interceptor.

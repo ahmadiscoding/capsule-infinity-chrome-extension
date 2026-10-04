@@ -60,7 +60,14 @@ const CapsuleAnimation = {
       opacity: 0;
       transition: all ${duration * 0.3}ms cubic-bezier(0.4, 0, 0.2, 1);
     `;
-    capsule.textContent = '\u{1F48A}'; // 💊
+    const capsuleImg = document.createElement('img');
+    capsuleImg.src = chrome.runtime.getURL('assets/logo-64.png');
+    capsuleImg.alt = 'Capsule Infinity';
+    capsuleImg.style.cssText = 'width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block;';
+    capsuleImg.onerror = () => {
+      capsule.textContent = String.fromCodePoint(128138);
+    };
+    capsule.appendChild(capsuleImg);
     document.body.appendChild(capsule);
 
     // Get the floating button position

@@ -170,7 +170,7 @@ console.warn = function(...args) {
     if (!capsules || capsules.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon">💊</div>
+          <div class="empty-state-icon"><img src="../assets/logo-square-512.png" alt="Capsule Infinity"></div>
           <div class="empty-state-text">No capsules yet.<br>Start by capturing a conversation!</div>
         </div>`;
       return;

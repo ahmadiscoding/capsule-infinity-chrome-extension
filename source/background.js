@@ -30,7 +30,7 @@ chrome.action.onClicked.addListener((tab) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: 'ci-capture',
-    title: '\u{1F48A} Capture as Capsule',
+    title: 'Capture as Capsule',
     contexts: ['selection', 'page'],
     documentUrlPatterns: [
       'https://chatgpt.com/*', 'https://claude.ai/*', 'https://gemini.google.com/*',

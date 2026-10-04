@@ -625,7 +625,7 @@ console.warn = function(...args) {
     if (capsules.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon">💊</div>
+          <div class="empty-state-icon"><img src="../assets/logo-square-512.png" alt="Capsule Infinity"></div>
           <div class="empty-state-text">${state.searchQuery ? 'No results found.' : 'No capsules yet.<br>Go capture a conversation!'}</div>
         </div>`;
       return;

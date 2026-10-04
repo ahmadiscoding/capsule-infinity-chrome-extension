@@ -134,7 +134,16 @@
     btn.id = FLOATING_ID;
     btn.className = 'ci-floating-btn';
     btn.title = 'Capsule Infinity - Capture conversation';
-    btn.innerHTML = '\u{1F48A}'; // 💊
+
+    const img = document.createElement('img');
+    img.className = 'ci-floating-btn-icon';
+    img.src = chrome.runtime.getURL('assets/logo-64.png');
+    img.alt = 'Capsule Infinity';
+    img.onerror = () => {
+      btn.textContent = String.fromCodePoint(128138);
+    };
+    btn.appendChild(img);
+
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -168,7 +177,7 @@
       </button>
       <div class="ci-dialogue-menu" id="ci-dialogue-menu">
         <div class="ci-dialogue-menu-header">
-          <span>\u{1F48A} Capsule Infinity</span>
+          <span class="ci-dialogue-title-wrap">Capsule Infinity</span>
           <span class="ci-dialogue-menu-count" id="ci-menu-count">0</span>
         </div>
         <div class="ci-dialogue-menu-search">
@@ -179,6 +188,16 @@
         </div>
       </div>
     `;
+
+    const titleWrap = wrapper.querySelector('.ci-dialogue-title-wrap');
+    if (titleWrap) {
+      const mark = document.createElement('img');
+      mark.src = chrome.runtime.getURL('assets/logo-64.png');
+      mark.style.cssText = 'width:16px;height:16px;vertical-align:middle;margin-right:6px;object-fit:contain;display:inline-block;';
+      mark.alt = '';
+      mark.onerror = () => { mark.replaceWith(String.fromCodePoint(128138) + ' '); };
+      titleWrap.prepend(mark);
+    }
 
     // Position relative to the container
     wrapper.style.position = 'relative';
@@ -293,7 +312,7 @@
         item.style.opacity = '0.5';
         const ghost = document.createElement('div');
         ghost.style.cssText = 'position:fixed;z-index:99999;background:linear-gradient(135deg,#6366f1,#a855f7);color:white;padding:6px 12px;border-radius:8px;font-size:12px;pointer-events:none;box-shadow:0 8px 25px rgba(99,102,241,0.4);';
-        ghost.textContent = '\u{1F48A} ' + item.querySelector('.ci-menu-item-title').textContent;
+        ghost.textContent = item.querySelector('.ci-menu-item-title').textContent;
         document.body.appendChild(ghost);
         e.dataTransfer.setDragImage(ghost, 0, 0);
         setTimeout(() => ghost.remove(), 0);
@@ -1690,7 +1709,7 @@
     overlay.innerHTML = `
       <div class="ci-modal">
         <div class="ci-modal-header">
-          <h3>\u{1F48A} Capture as Capsule</h3>
+          <h3>Capture as Capsule</h3>
           <button class="ci-modal-close" id="ci-modal-close">&times;</button>
         </div>
         <div class="ci-modal-body">
@@ -1725,9 +1744,19 @@
         <div class="ci-modal-footer">
           <button class="ci-btn ci-btn-secondary" id="ci-modal-cancel">Cancel</button>
           <button class="ci-btn ci-btn-add" id="ci-add-another">+ Add Another</button>
-          <button class="ci-btn ci-btn-primary" id="ci-modal-save">\u{1F48A} Save Capsule</button>
+          <button class="ci-btn ci-btn-primary" id="ci-modal-save">Save Capsule</button>
         </div>
       </div>`;
+
+    const modalTitle = overlay.querySelector('.ci-modal-header h3');
+    if (modalTitle) {
+      const modalLogo = document.createElement('img');
+      modalLogo.src = chrome.runtime.getURL('assets/logo-64.png');
+      modalLogo.style.cssText = 'width:18px;height:18px;vertical-align:middle;margin-right:6px;object-fit:contain;display:inline-block;';
+      modalLogo.alt = '';
+      modalLogo.onerror = () => { modalLogo.replaceWith(String.fromCodePoint(128138) + ' '); };
+      modalTitle.prepend(modalLogo);
+    }
 
     document.body.appendChild(overlay);
 
@@ -1955,13 +1984,13 @@
           showSaveSuccessToast(saved);
           removeModal();
         } else {
-          saveBtn.textContent = '\u{1F48A} Save Capsule';
+          saveBtn.textContent = 'Save Capsule';
           saveBtn.disabled = false;
         }
       } catch (err) {
         console.error('[Capture Modal] Save failed or timed out:', err);
         showToast(err.message || 'Save failed', 'error');
-        saveBtn.textContent = '\u{1F48A} Save Capsule';
+        saveBtn.textContent = 'Save Capsule';
         saveBtn.disabled = false;
       }
     });
@@ -1978,7 +2007,7 @@
         const saved = await Promise.race([doSave(), timeoutPromise]);
         if (saved) {
           showSaveSuccessToast(saved);
-          saveBtn.textContent = '\u{1F48A} Save Capsule';
+          saveBtn.textContent = 'Save Capsule';
           saveBtn.disabled = false;
           overlay.querySelector('#ci-cap-title').value = '';
           overlay.querySelector('#ci-cap-content').value = '';
@@ -2090,8 +2119,8 @@
     document.querySelectorAll('.ci-toast').forEach(t => t.remove());
     const toast = document.createElement('div');
     toast.className = `ci-toast ci-toast-${type}`;
-    const icons = { success: '\u2705', error: '\u274C', info: '\u{1F48A}' };
-    toast.innerHTML = `<span>${icons[type] || '\u{1F48A}'}</span><span>${CapsuleUtils.sanitize(message)}</span>`;
+    const icons = { success: '\u2705', error: '\u274C', info: '\u2139\uFE0F' };
+    toast.innerHTML = `<span>${icons[type] || '\u2139\uFE0F'}</span><span>${CapsuleUtils.sanitize(message)}</span>`;
     document.body.appendChild(toast);
     setTimeout(() => { toast.classList.add('ci-toast-exit'); setTimeout(() => toast.remove(), 300); }, 3000);
   }
@@ -2250,7 +2279,7 @@
         showContextualBanner({
           id: 'trigger3',
           type: 'trigger-3',
-          icon: '💊',
+          icon: null,
           text: "You have saved context from earlier — want to bring it into this chat?",
           actionText: 'Bring in Context',
           onAction: () => {
@@ -2311,10 +2340,23 @@
     actionsHtml += `<button class="ci-banner-dismiss" id="ci-banner-dis-btn" aria-label="Dismiss banner">&times;</button>`;
 
     banner.innerHTML = `
-      <span class="ci-banner-icon">${config.icon || '💊'}</span>
+      <span class="ci-banner-icon"></span>
       <span class="ci-banner-text">${CapsuleUtils.sanitize(config.text)}</span>
       <div class="ci-banner-actions">${actionsHtml}</div>
     `;
+
+    const iconEl = banner.querySelector('.ci-banner-icon');
+    if (config.icon) {
+      iconEl.textContent = config.icon;
+    } else {
+      const bannerImg = document.createElement('img');
+      bannerImg.src = chrome.runtime.getURL('assets/logo-64.png');
+      bannerImg.alt = 'Capsule Infinity';
+      bannerImg.onerror = () => {
+        iconEl.textContent = String.fromCodePoint(128138);
+      };
+      iconEl.appendChild(bannerImg);
+    }
 
     wrapper.appendChild(banner);
     activeBannerEl = banner;

@@ -40,6 +40,16 @@
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3) !important;
 }
 
+.ci-floating-btn img,
+.ci-floating-btn-icon {
+  width: 30px !important;
+  height: auto !important;
+  max-height: 30px !important;
+  object-fit: contain !important;
+  pointer-events: none !important;
+  display: block !important;
+}
+
 @keyframes ci-pulse-glow {
   0%, 100% { box-shadow: 0 4px 20px rgba(99,102,241,0.3), 0 0 0 0 rgba(99,102,241,0.2); }
   50% { box-shadow: 0 4px 30px rgba(99,102,241,0.5), 0 0 0 8px rgba(99,102,241,0); }
@@ -510,6 +520,17 @@
 .ci-banner-icon {
   font-size: 16px !important;
   flex-shrink: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.ci-banner-icon img {
+  height: 18px !important;
+  width: auto !important;
+  max-width: 24px !important;
+  object-fit: contain !important;
+  display: block !important;
+  pointer-events: none !important;
 }
 
 .ci-banner-text {

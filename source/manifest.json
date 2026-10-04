@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Capsule Infinity",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Capture and reuse AI conversations as context Capsules across ChatGPT, Claude, Gemini, and DeepSeek.",
   "permissions": [
     "storage",
