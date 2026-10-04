@@ -72,6 +72,17 @@ console.warn = function(...args) {
   }
 
   async function init() {
+    // Read and display manifest version
+    try {
+      const manifest = chrome.runtime.getManifest();
+      if (manifest?.version) {
+        const badge = $('#headerBadge');
+        if (badge) badge.textContent = `v${manifest.version}`;
+        const footerVer = $('#footerVersion');
+        if (footerVer) footerVer.textContent = manifest.version;
+      }
+    } catch {}
+
     // Configure API
     if (API) await API.configure();
 
@@ -170,8 +181,9 @@ console.warn = function(...args) {
     if (!capsules || capsules.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
-          <div class="empty-state-icon"><img src="../assets/logo-square-512.png" alt="Capsule Infinity"></div>
-          <div class="empty-state-text">No capsules yet.<br>Start by capturing a conversation!</div>
+          <div class="empty-state-icon"><img src="../assets/logo-square-512.png" alt="Capsule Infinity" style="width:40px;height:40px;opacity:1;"></div>
+          <div class="empty-state-title">No capsules yet.</div>
+          <div class="empty-state-text">Start by capturing a conversation!</div>
         </div>`;
       return;
     }
@@ -198,8 +210,8 @@ console.warn = function(...args) {
             </div>
           </div>
           <div class="capsule-actions-popup">
-            <button class="capsule-action-btn" title="Copy content" data-action="copy" data-id="${c.id}">📋</button>
-            <button class="capsule-action-btn" title="Delete" data-action="delete" data-id="${c.id}">🗑</button>
+            <button class="capsule-action-btn" title="Copy content" data-action="copy" data-id="${c.id}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></button>
+            <button class="capsule-action-btn danger" title="Delete" data-action="delete" data-id="${c.id}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg></button>
           </div>
         </div>`;
     }).join('');

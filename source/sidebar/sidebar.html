@@ -5,10 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Capsule Infinity - Library</title>
   <style>
+    /* ============ INTER FONT (LOCALLY BUNDLED) ============ */
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: url('../assets/fonts/Inter-Variable.woff2') format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
+
+    @font-face {
+      font-family: 'Inter';
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: url('../assets/fonts/Inter-Variable-latin-ext.woff2') format('woff2');
+      unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02D9, U+02DB-02DD, U+02DF-0303, U+0305-0307, U+0309-0328, U+032A-0338, U+033A-036F, U+0483-0487, U+0591-05CF, U+05EB-05F4, U+0610-061A, U+064B-065F, U+0670, U+06D6-06ED, U+0711, U+0730-074A, U+07A6-07B0, U+07EB-07F3, U+0816-0819, U+081B-0823, U+0825-0827, U+0829-082D, U+0859-085B, U+0898-089F, U+08CA-08E1, U+08E3-0903, U+093A-093C, U+093E-094F, U+0951-0957, U+0962-0963, U+0981-0983, U+09BC, U+09BE-09CD, U+09D7, U+09E2-09E3, U+0A01-0A03, U+0A3C, U+0A3E-0A4D, U+0A66-0A71, U+0A81-0A83, U+0ABC, U+0ABE-0ACD, U+0AE2-0AE3, U+0AF9, U+0B01-0B03, U+0B3C, U+0B3E-0B55, U+0B57, U+0B62-0B63, U+0B82, U+0BBE-0BCD, U+0BD7, U+0C00-0C04, U+0C3E-0C56, U+0C62-0C63, U+0C81-0C83, U+0CBC, U+0CBE-0CD6, U+0CE2-0CE3, U+0D00-0D03, U+0D3B-0D3C, U+0D3E-0D4E, U+0D57, U+0D62-0D63, U+0D81-0D83, U+0DCA, U+0DCF-0DD6, U+0DD8-0DDF, U+0DF2-0DF3, U+0E31, U+0E34-0E3A, U+0E47-0E4E, U+0EB1, U+0EB4-0EBC, U+0EC8-0ECD, U+0F18-0F19, U+0F35, U+0F37, U+0F39, U+0F71-0F7E, U+0F80-0F84, U+0F86-0F87, U+0F8D-0F97, U+0F99-0FBC, U+0FC6, U+102D-1030, U+1032-1037, U+1039-103A, U+103D-103E, U+1058-1059, U+105E-1060, U+1062-1064, U+1067-106D, U+1071-1074, U+1082-108D, U+108F, U+109A-109D, U+135D-135F, U+1712-1714, U+1732-1734, U+1752-1753, U+1772-1773, U+17B4-17D3, U+17DD, U+180B-180D, U+1885-1886, U+18A9, U+1920-192B, U+1930-193B, U+19B0-19C0, U+19C8-19C9, U+1A17-1A1B, U+1A55-1A5E, U+1A60-1A7C, U+1A7F, U+1AB0-1ACE, U+1B00-1B04, U+1B34-1B44, U+1B6B-1B73, U+1B80-1B82, U+1BA1-1BAD, U+1BE6-1BF3, U+1C24-1C37, U+1CD0-1CD2, U+1CD4-1CE8, U+1CED, U+1CF2-1CF4, U+1CF7-1CF9, U+1DC0-1DFF, U+200C-200D, U+20D0-20FF, U+2CEF-2CF1, U+2D7F, U+2DE0-2DFF, U+A66F, U+A674-A67D, U+A69E-A69F, U+A6F0-A6F1, U+A802, U+A806, U+A80B, U+A823-A827, U+A880-A881, U+A8B4-A8C5, U+A8E0-A8F1, U+A926-A92D, U+A947-A953, U+A980-A983, U+A9B3-A9C0, U+A9E5, U+AA29-AA36, U+AA43, U+AA4C-AA4D, U+AA7B-AA7D, U+AAB0, U+AAB2-AAB4, U+AAB7-AAB8, U+AABE-AABF, U+AAC1, U+AAEC-AAED, U+AAF5-AAF6, U+ABE3-ABEA, U+ABEC-ABED, U+FB1E, U+FE00-FE0F, U+FE20-FE2F;
+    }
+
+    :root {
+      --logo-header-h: 20px;
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       width: 360px; height: 100vh;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
       background: #0a0a14; color: #e2e8f0;
       overflow: hidden; display: flex; flex-direction: column;
     }
@@ -147,12 +171,12 @@
     .app-header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .app-header-left { display: flex; align-items: center; gap: 8px; }
     .app-logo {
-      height: 24px; width: auto;
+      height: var(--logo-header-h, 20px); width: auto;
       background: transparent; display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
     }
     .app-logo img {
-      height: 24px; width: auto;
+      height: var(--logo-header-h, 20px); width: auto;
       max-width: 100%;
       object-fit: contain; display: block;
       flex-shrink: 0;
@@ -565,7 +589,8 @@
       justify-content: center;
       font-size: 11px;
       color: rgba(255,255,255,0.3);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
       z-index: 9999;
       pointer-events: none;
     }
