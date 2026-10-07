@@ -1,125 +1,141 @@
 # Privacy Policy for Capsule Infinity
 
-**Last Updated: September 7, 2026**
+**Effective Date:** October 7, 2026  
+**Last Updated:** October 7, 2026
 
-**Capsule Infinity** ("we", "our", or "the extension") is a browser extension designed to capture AI chat conversations as structured, portable context units ("Capsules") and synchronize them across devices. We are committed to protecting your privacy and handling your data with transparency and security.
+Capsule Infinity ("we", "us", or "our") provides a browser extension that allows users to capture, summarize, and organize conversational artificial intelligence (AI) sessions into structured, portable context units ("Capsules").
 
-This Privacy Policy explains what data we collect, how it is used, how it is protected, and your rights regarding your data.
-
----
-
-## 1. Core Privacy Principles
-
-* **Explicit User Actions Only**: Capsule Infinity never passively logs, monitors, or scrapes your background browsing activity. Conversation capture occurs **only when you explicitly trigger a capture action** (e.g., clicking the floating capture pill or popup action).
-* **Zero Data Monetization**: We do **not** sell, rent, monetize, or trade your personal information, chat transcripts, or usage data to third parties, advertisers, or data brokers.
-* **Offline-First Storage**: All saved capsules and settings are stored locally on your device (`chrome.storage.local`) by default. Cloud synchronization is entirely optional.
+This Privacy Policy explains what data we collect, how it is used, how it is stored and protected, and your rights and choices regarding your data.
 
 ---
 
-## 2. Information We Collect and Process
+## 1. Who We Are
 
-### A. Information Stored Locally on Your Device
-When you use Capsule Infinity, the following information is stored directly within your browser's local storage:
-* **Captured Chat Transcripts & Capsules**: The text and structured summaries generated from your AI conversations (ChatGPT, Claude, Gemini, DeepSeek, etc.).
-* **Conversation Fingerprints**: Local hashes of your recent conversation snippets used to provide instant deduplication caching without consuming AI quota.
-* **User Preferences**: Extension settings including theme preference, floating button visibility, and sync settings.
+Capsule Infinity is developed and maintained by **Muhammad Ahmad**.
 
-### B. Information Processed for Optional Cloud Sync (Supabase)
-If you choose to sign in to enable cross-device cloud synchronization:
-* **Account Identifiers**: Your email address, profile name, and unique user ID provided via Google OAuth authentication (using the secure PKCE flow).
-* **Cloud-Synced Capsules**: Your saved capsules stored securely in an isolated PostgreSQL database powered by Supabase, protected by Row Level Security (RLS) ensuring that only your authenticated account can access your data.
-* **Monthly Usage Quota Counters**: Aggregate counters tracking your monthly AI capsule compression usage against plan limits.
+* **Contact Email:** capsuleinfinity.support@gmail.com
+* **GitHub Repository:** [https://github.com/ahmadiscoding/capsule-infinity-chrome-extension](https://github.com/ahmadiscoding/capsule-infinity-chrome-extension)
 
-### C. Server-Side AI Compression Processing
-When you capture a conversation using the AI compression engine:
-* The conversation transcript is transmitted securely over an encrypted connection (HTTPS/TLS) to our backend Supabase Edge Function.
-* The backend securely relays the text to generative AI inference providers (Google Gemini / Groq) solely to extract structured intent, key decisions, constraints, and technical details.
-* Transcripts are processed ephemerally for capsule generation and are never retained by our Edge Function server logs.
+If you have questions about this policy or your data, please contact us at the email address above.
 
 ---
 
-## 3. Information We Do NOT Collect
+## 2. User Data Collection
 
-* We do **not** collect passwords or financial payment information.
-* We do **not** track your general browsing history, search history, or non-AI web page visits.
-* We do **not** inject advertisements or use third-party analytics trackers.
+We collect and handle only the data necessary to provide and maintain the extension's features. We collect the following categories of information:
 
----
+### A. Information Collected Upon Explicit User Action
+* **Conversation Content**: When you explicitly choose to capture an AI conversation (by clicking the capture button or using the context menu), the conversation transcript from that session is collected to generate a structured Capsule.
+* **Capsule Metadata**: Each saved capsule includes a title, the source AI platform name (such as ChatGPT, Claude, Gemini, or DeepSeek), the date/time created, and the source page URL (`sourceUrl`) of the captured conversation.
+* **User Feedback & Ratings**: If you voluntarily submit feedback through the in-extension feedback modal, we collect your submitted rating (1–5 stars), optional written explanation, follow-up preference, and account identifier (if signed in).
 
-## 4. How We Use Your Information
+### B. In-Memory Conversation Reading on Supported AI Sites
+* On supported AI chat websites (such as ChatGPT, Claude, and Gemini), the extension reads conversation responses in the active webpage's volatile memory as the page loads so that the extension is ready to capture when you request it.
+* **This in-memory data is held strictly in temporary browser memory.** It is never written to disk, never saved to persistent storage, and never transmitted over the network unless you explicitly trigger a capture action. If you navigate away, reload the page, or close the tab without capturing, the in-memory data is discarded.
 
-We use the information collected solely to:
-1. Generate token-efficient, structured context capsules from your AI conversations.
-2. Synchronize your saved capsules across your devices when signed in.
-3. Manage and display your personal capsule library in the popup and side panel interfaces.
-4. Enforce fair-use monthly compression limits and prevent automated spam.
+### C. Account and Cloud Synchronization Data (When Signed In)
+If you optionally sign in using Google Sign-In to sync your capsules across devices:
+* **Account Identifiers**: Your Google display name, email address, and profile ID provided via Google Identity Services (OAuth / PKCE flow).
+* **Cloud-Synced Library**: Your saved capsules and organizational folder metadata are stored in our cloud database to provide cross-device synchronization.
+* **Monthly Usage Quota Counters**: A counter tracking the number of AI compression requests associated with your account per calendar month to enforce fair-use limits.
 
----
-
-## 5. Third-Party Services and Data Sharing
-
-Capsule Infinity interacts only with trusted, secure infrastructure providers necessary for core extension functionality:
-
-* **Supabase (Database & Authentication)**: Provides encrypted cloud database storage, user authentication, and serverless Edge Functions. ([Supabase Privacy Policy](https://supabase.com/privacy))
-* **Google Identity Services (OAuth / PKCE)**: Facilitates secure sign-in without exposing user credentials to the extension. ([Google Privacy Policy](https://policies.google.com/privacy))
-* **Google Cloud / AI Studio & Groq (Inference Providers)**: Processes transcripts ephemerally to generate structured capsule summaries. Personal API keys are never exposed to the client.
-
-We do not disclose your data to any other third parties unless required by applicable law.
+### D. Local Storage and Preferences (Stored on Your Device)
+The following information is stored strictly on your local device (`chrome.storage.local`):
+* Locally saved capsules and custom folder structures.
+* User preferences (such as dark/light theme, floating button visibility, and sync preferences).
+* Consent status record indicating whether you have reviewed and accepted the in-product data notice.
+* Authentication tokens (Google OAuth access tokens and Supabase session tokens) held locally to keep you signed in.
 
 ---
 
-## 6. Data Security and Retention
+## 3. How We Use and Handle Your Data
 
-* **Encryption in Transit**: All communications between the extension, Supabase backend, and AI APIs use modern TLS encryption (HTTPS).
-* **Row Level Security (RLS)**: Cloud database tables enforce strict user-level isolation policies. No user can read, modify, or delete another user's capsules.
-* **User Data Control & Deletion**: You retain 100% ownership of your data. You can delete individual capsules or wipe your entire local library at any time directly through the extension UI.
+We use collected information solely for the following purposes:
 
-### 6.1 Data Retention
+1. **Creating Context Capsules**: To extract and format user intent, key decisions, constraints, and technical details from AI conversations you choose to capture.
+2. **Cloud Synchronization**: To synchronize your saved capsules and folder structures across your devices when you are signed into an account.
+3. **Quota & Rate Management**: To count monthly compression requests and apply fair-use limits.
+4. **Product Support & Improvement**: To review user-submitted ratings and feedback to resolve technical issues.
 
-* **Local Data**: Capsules, fingerprints, and preferences stored in `chrome.storage.local` persist on your device indefinitely until you delete them yourself (individually, in bulk, or by uninstalling the extension, which erases all local extension data automatically).
-* **Cloud Data**: If you enable cloud sync, your account identifiers and synced capsules are retained in our Supabase database for as long as your account remains active. We do not use retained data for any purpose beyond providing the extension's core sync and compression features.
-* **Server Logs**: Conversation transcripts sent to our Edge Function for AI compression are processed in memory and are not written to persistent logs or storage; they are discarded immediately after the structured capsule is generated and returned to you.
+### Commercial & Marketing Restrictions
+* We do **not** sell, rent, monetize, or trade your personal information or chat content to third parties, data brokers, or advertisers.
+* We do **not** use your personal information or conversation content to serve personalized, targeted, or interest-based advertisements.
+* We do **not** use or transfer your data to assess creditworthiness or for lending purposes.
+* We do **not** use your data for purposes unrelated to the core functionality of Capsule Infinity.
 
-### 6.2 Data Deletion
-
-You can delete your data at any time through the following processes:
-
-* **Local data only**: Use the "Delete" option on any individual capsule, or "Clear All Local Data" in the extension's settings, to permanently erase content from your device. Uninstalling the extension also erases all local data immediately.
-* **Full account and cloud data deletion**: Click "Delete Account" in the extension's Account menu (available in both the popup and side panel). This immediately and permanently deletes your Supabase Auth account, all cloud-synced capsules, usage records, and any associated data. This action cannot be undone.
-* **Alternative**: If you are unable to access the extension, you may email `capsuleinfinity.support@gmail.com` with your account email and we will process full account and data deletion within 30 days.
-
-### 6.3 Children's Privacy
-
-Capsule Infinity is not directed at, and is not intended for use by, children under the age of 13. We do not knowingly collect personal information from children under 13. If we become aware that we have inadvertently collected such information, we will delete it promptly.
-
-### 6.4 Cookies and Tracking Technologies
-
-Capsule Infinity does **not** use cookies, web beacons, fingerprinting scripts, or any third-party analytics or advertising trackers. The "Conversation Fingerprints" described in Section 2A are local content hashes used only for on-device deduplication and are never used to track you across sites or sessions.
-
-### 6.5 International Users
-
-Our cloud infrastructure (Supabase) may process and store data in data centers located outside of your country of residence. By using cloud sync, you consent to this transfer and processing. We take reasonable steps to ensure your data receives an adequate level of protection wherever it is processed.
+### Google API Limited Use Disclosure
+The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements.
 
 ---
 
-## 7. Google Chrome Web Store Policy Compliance
+## 4. Storage, Security and Retention
 
-Capsule Infinity strictly adheres to the **Chrome Web Store User Data Policy**, including the **Limited Use** requirements:
-* We only request permissions necessary to deliver the stated features of the extension.
-* We do not use or transfer user data for serving personalized, retargeted, or interest-based advertisements.
-* We do not use or transfer user data to determine creditworthiness or for lending purposes.
+### Storage
+* **Local Storage**: By default, capsules, folder configurations, user settings, and session tokens are saved directly in your browser's local extension storage (`chrome.storage.local`).
+* **Cloud Database**: For users who sign in to enable cloud sync, capsules, user usage records, and feedback entries are stored in a managed PostgreSQL cloud database hosted by Supabase.
+
+### Security
+* **Encryption in Transit**: All network communications between the extension, backend servers, and AI providers use secure Transport Layer Security (HTTPS/TLS).
+* **Row Level Security (RLS)**: Cloud database tables for capsules and user usage enforce Row Level Security policies at the database layer, ensuring that authenticated users can access only their own records.
+
+### Retention
+* **Local Data**: Data stored in `chrome.storage.local` persists on your device until you delete individual items, clear your local data in settings, or uninstall the extension.
+* **Cloud Data**: If cloud sync is enabled, your account identifiers, synced capsules, and usage counters are retained in the cloud database for as long as your account remains active.
+* **AI Processing**: Conversation transcripts sent to our backend are relayed to third-party AI providers (Google Gemini and Groq) to generate the structured capsule summary, subject to their respective terms and retention practices.
 
 ---
 
-## 8. Changes to This Privacy Policy
+## 5. Sharing and Disclosure
 
-We may update this Privacy Policy from time to time to reflect improvements or updates to our features. Any updates will be published to this repository with a revised "Last Updated" date.
+Capsule Infinity shares data only with the third-party infrastructure and service providers required to deliver the extension's features:
+
+* **Supabase (Backend Infrastructure)**: Supabase Inc. provides cloud database storage, authentication management, and serverless Edge Functions. When signed in, your account identifiers and saved capsules are stored in Supabase. When performing AI compression, the extension transmits the conversation transcript to a Supabase Edge Function to coordinate AI processing. ([Supabase Privacy Policy](https://supabase.com/privacy))
+* **AI Service Providers (Google Gemini & Groq)**: To generate structured capsule summaries, our backend relays conversation transcripts to generative AI providers:
+  - **Google Gemini** (via Google AI Studio / Google Cloud API; see [Google Privacy Policy](https://policies.google.com/privacy) and [Google Gemini API Additional Terms](https://ai.google.dev/gemini-api/terms))
+  - **Groq** (via GroqCloud API; see [Groq Privacy Policy](https://groq.com/privacy-policy/) and [Groq Terms of Service](https://groq.com/terms-of-service/))  
+  Your conversation text is processed by these providers under their own applicable terms and privacy policies. Because capsule compression relies on these AI providers, capturing a conversation transmits the transcript to our backend server and these AI providers **regardless of whether you are signed into an account or using the extension anonymously**.
+* **Google Identity Services**: Facilitates secure OAuth authentication when you choose to sign in, transmitting authentication tokens to verify your identity. ([Google Privacy Policy](https://policies.google.com/privacy))
+* **Email Client / Gmail**: If you choose to share a team invite via email, the extension opens a standard Gmail compose window (`mail.google.com`) in your browser with draft text pre-filled. The extension does not access, read, or send emails on your behalf; sending is controlled entirely by you.
+* **Teams Feature**: In this version of the extension, the Teams collaboration feature is disabled. No team data, member emails, or invite codes are sent to external key-value databases, Supabase, or any external servers.
+* **Legal Requirements**: We may disclose information if required to do so by law, subpoena, or valid legal process.
 
 ---
 
-## 9. Contact Us
+## 6. Your Choices and Deletion
 
-If you have any questions, concerns, or privacy-related requests regarding Capsule Infinity or this Privacy Policy, please contact us at:
+You have full control over your data stored within Capsule Infinity:
 
-* **Email**: `capsuleinfinity.support@gmail.com`
-* **GitHub Repository**: [https://github.com/ahmadiscoding/capsule-infinity-chrome-extension](https://github.com/ahmadiscoding/capsule-infinity-chrome-extension)
+* **Deleting Individual Capsules**: You can delete any saved capsule at any time through the popup or side panel interface. Deleting a capsule removes it from your local storage and, if signed in, deletes the corresponding record from the cloud database.
+* **Clear All Data (Local)**: You can wipe all locally stored capsules and reset folders at any time by selecting "Clear All Data" in the extension's side panel Settings.
+* **Signing Out**: You can sign out at any time from the Account menu. Signing out clears active session tokens and cached profile details from your local device.
+* **Sign Out and Clear Local Data (In-App)**: You can select "Sign out and clear local data" in the Account menu (in the popup or side panel). This action clears all local storage, removes local authentication tokens from your device, and resets the extension to a logged-out state. It does not delete your cloud account.
+* **Cloud Account & Cloud Data Erasure**: To request permanent deletion of your cloud account record, cloud-synced capsules, and feedback entries from our cloud database, please email `capsuleinfinity.support@gmail.com`. We will verify and process your deletion request within 30 days.
+* **Uninstalling the Extension**: You can uninstall Capsule Infinity at any time through your Chrome extensions manager (`chrome://extensions`). Uninstalling immediately deletes all data stored in `chrome.storage.local` on your device.
+
+---
+
+## 7. Children
+
+Capsule Infinity is not directed to children under 13 years of age, and we do not knowingly collect personal information from children under 13. If you believe that a child under 13 has provided us with personal information, please contact us at `capsuleinfinity.support@gmail.com`, and we will promptly take steps to delete that information.
+
+---
+
+## 8. International Users
+
+Our cloud and AI infrastructure providers (Supabase, Google, Groq) maintain servers in the United States and other regions. By using Capsule Infinity and enabling cloud features, you acknowledge that your information may be transferred to and processed in jurisdictions outside your country of residence, where privacy and data protection standards may differ from those in your home country.
+
+---
+
+## 9. Changes to This Privacy Policy
+
+We may update this Privacy Policy periodically to reflect changes in our practices, features, or regulatory requirements. Any updates will be posted to this repository with an updated "Last Updated" date at the top of the policy.
+
+---
+
+## 10. Contact
+
+If you have questions, feedback, or data privacy requests concerning this Privacy Policy, please contact us:
+
+* **Developer:** Muhammad Ahmad
+* **Email:** capsuleinfinity.support@gmail.com
+* **GitHub Repository:** [https://github.com/ahmadiscoding/capsule-infinity-chrome-extension](https://github.com/ahmadiscoding/capsule-infinity-chrome-extension)

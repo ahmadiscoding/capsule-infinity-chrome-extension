@@ -144,9 +144,14 @@
     };
     btn.appendChild(img);
 
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const consentRes = await chrome.storage.local.get('consent');
+      if (!consentRes?.consent?.accepted) {
+        showToast('Please open Capsule Infinity and accept the data notice first.', 'info');
+        return;
+      }
       handleCapture();
     });
     document.body.appendChild(btn);
@@ -1652,6 +1657,12 @@
   // CAPTURE HANDLER with Instant Loading Feedback & Animation
   // ============================================================
   async function handleCapture() {
+    const consentRes = await chrome.storage.local.get('consent');
+    if (!consentRes?.consent?.accepted) {
+      showToast('Please open Capsule Infinity and accept the data notice first.', 'info');
+      return;
+    }
+
     // 1. Trigger instant UI loading banner synchronously on click before network/scraping
     showCaptureLoadingBanner();
 

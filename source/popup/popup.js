@@ -86,11 +86,120 @@ console.warn = function(...args) {
     // Configure API
     if (API) await API.configure();
 
+    // Check data notice and consent
+    const consentRes = await chrome.storage.local.get('consent');
+    if (!consentRes?.consent?.accepted) {
+      showConsentModal();
+    }
+
+    const linkPrivacy = $('#linkPrivacyPopup');
+    if (linkPrivacy) {
+      linkPrivacy.addEventListener('click', (e) => {
+        e.preventDefault();
+        showConsentModal({ forceWithdrawalOption: true });
+      });
+    }
+
     const result = await chrome.storage.local.get(['authToken', 'user', 'googleAuth']);
     if (result.authToken || result.user) {
       showDashboard(result.user);
     } else {
       showScreen(loginScreen);
+    }
+  }
+
+  // =============================================
+  // DATA NOTICE & CONSENT MODAL
+  // =============================================
+  async function showConsentModal({ forceWithdrawalOption = false } = {}) {
+    const existing = document.getElementById('ci-consent-modal');
+    if (existing) existing.remove();
+
+    const consentRes = await chrome.storage.local.get('consent');
+    const isAccepted = !!(consentRes.consent && consentRes.consent.accepted);
+
+    const modal = document.createElement('div');
+    modal.id = 'ci-consent-modal';
+    modal.className = 'modal-overlay open';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;';
+
+    const showWithdraw = forceWithdrawalOption || isAccepted;
+
+    modal.innerHTML = `
+      <div style="background:#1d1d25;border:1px solid rgba(255,255,255,0.12);border-radius:14px;width:100%;max-width:350px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 16px 40px rgba(0,0,0,0.6);overflow:hidden;font-family:inherit;color:#ffffff;text-align:left;">
+        <div style="padding:14px 16px 12px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b58ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <h3 style="font-size:14px;font-weight:600;margin:0;color:#ffffff;letter-spacing:-0.01em;">Data Notice & Consent</h3>
+          </div>
+          <button id="ciConsentCloseTop" style="background:none;border:none;color:#9d9db5;font-size:18px;cursor:pointer;padding:0;line-height:1;">✕</button>
+        </div>
+        <div style="padding:14px 16px;overflow-y:auto;font-size:11.5px;line-height:1.5;color:#9d9db5;flex:1;">
+          <p style="margin:0 0 10px;color:#e2e8f0;font-size:11.5px;">
+            Capsule Infinity turns your AI chats into reusable knowledge capsules. Before using capture or cloud features, please review how your data is handled:
+          </p>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:9px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;">
+            <div>
+              <strong style="color:#ffffff;display:block;margin-bottom:2px;">• What is sent:</strong>
+              <span>Only the AI conversations you choose to capture, together with the webpage title and source URL.</span>
+            </div>
+            <div>
+              <strong style="color:#ffffff;display:block;margin-bottom:2px;">• Who receives it:</strong>
+              <span>Our backend server and AI service providers (Google Gemini and Groq) process your conversation text under their respective privacy policies and terms to generate structured summaries—even when not signed in. If you sign in, our cloud provider (Supabase) securely syncs your capsules, folders, and profile.</span>
+            </div>
+            <div>
+              <strong style="color:#ffffff;display:block;margin-bottom:2px;">• Your privacy:</strong>
+              <span>We never sell your data and never use it for advertising, tracking, or credit scoring.</span>
+            </div>
+          </div>
+          <p style="margin:0 0 8px;">
+            Read our full <a href="https://github.com/ahmadiscoding/capsule-infinity-chrome-extension/blob/main/PRIVACY_POLICY.md" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:underline;">Privacy Policy</a>.
+          </p>
+          <p style="margin:0;font-size:10.5px;color:#71717a;font-style:italic;">
+            Note: Without your agreement, conversation capture, AI summarization, and cloud sign-in remain disabled.
+          </p>
+        </div>
+        <div style="padding:10px 16px;border-top:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.2);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;">
+          ${showWithdraw ? `
+            <button id="ciConsentWithdrawBtn" style="padding:7px 12px;border-radius:7px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.1);color:#fca5a5;font-size:11.5px;font-weight:600;cursor:pointer;">Withdraw consent</button>
+            <button id="ciConsentCloseBtn" style="padding:7px 12px;border-radius:7px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#ffffff;font-size:11.5px;font-weight:500;cursor:pointer;">Close</button>
+          ` : `
+            <button id="ciConsentNotNowBtn" style="padding:7px 12px;border-radius:7px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#9d9db5;font-size:11.5px;font-weight:500;cursor:pointer;">Not now</button>
+            <button id="ciConsentAgreeBtn" style="padding:7px 15px;border-radius:7px;border:none;background:#6b58ff;color:#ffffff;font-size:11.5px;font-weight:600;cursor:pointer;">I Agree</button>
+          `}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('#ciConsentCloseTop').onclick = () => modal.remove();
+
+    if (showWithdraw) {
+      modal.querySelector('#ciConsentCloseBtn').onclick = () => modal.remove();
+      modal.querySelector('#ciConsentWithdrawBtn').onclick = async () => {
+        await chrome.storage.local.remove('consent');
+        modal.remove();
+        showToast('Consent withdrawn. Capture and cloud sync are now disabled.', 'info');
+      };
+    } else {
+      modal.querySelector('#ciConsentNotNowBtn').onclick = () => {
+        modal.remove();
+        showToast('Consent not accepted. Capture and cloud sync remain off.', 'info');
+      };
+      modal.querySelector('#ciConsentAgreeBtn').onclick = async () => {
+        await chrome.storage.local.set({
+          consent: { accepted: true, version: 1, at: Date.now() }
+        });
+        modal.remove();
+        showToast('Notice accepted. All features are enabled.', 'success');
+        const res = await chrome.storage.local.get(['authToken', 'user']);
+        if (res.authToken || res.user) {
+          loadDashboardData();
+        }
+      };
     }
   }
 
@@ -131,19 +240,8 @@ console.warn = function(...args) {
         folders = fr.folders || [];
       }
 
-      // Load teams
+      // Teams disabled in v1.0.3
       let teams = [];
-      try {
-        const settings = await chrome.storage.local.get(['supabaseUrl', 'user']);
-        if (settings.user?.email) {
-          teams = await Storage.getCloudTeams(settings.user.email);
-        } else if (API) {
-          const t = await API.getTeams();
-          teams = t && t.teams ? t.teams : (Array.isArray(t) ? t : []);
-        }
-      } catch (err) {
-        console.error('[Popup] Failed to load teams:', err);
-      }
       teams = teams || [];
 
       // Update stats
@@ -248,6 +346,13 @@ console.warn = function(...args) {
 
   // ---- Login handlers ----
   $('#loginBtn').addEventListener('click', async () => {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to sign in.', 'info');
+      return;
+    }
+
     const email = $('#loginEmail').value.trim();
     const password = $('#loginPassword').value;
 
@@ -275,6 +380,13 @@ console.warn = function(...args) {
   });
 
   $('#registerBtn').addEventListener('click', async () => {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to sign in.', 'info');
+      return;
+    }
+
     const name = $('#regName').value.trim();
     const email = $('#regEmail').value.trim();
     const password = $('#regPassword').value;
@@ -308,6 +420,13 @@ console.warn = function(...args) {
 
   // Universal Google OAuth Flow using background delegation
   async function handleGoogleAuth() {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to sign in.', 'info');
+      return;
+    }
+
     const btn = $('#googleLoginBtn') || $('#googleRegBtn');
     const orgText = btn ? btn.textContent : 'Sign in with Google';
     if (btn) {
@@ -473,9 +592,9 @@ console.warn = function(...args) {
           </div>
           <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);">
             <button id="accountDeleteBtn" style="width:100%;padding:10px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#fca5a5;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.2s;">
-              Delete Account
+              Sign out and clear local data
             </button>
-            <div style="font-size:11px;color:#475569;text-align:center;margin-top:8px;line-height:1.4;">This will permanently delete your account and all data.</div>
+            <div style="font-size:11px;color:#475569;text-align:center;margin-top:8px;line-height:1.4;">Clears local data and signs out. Does not delete cloud account.</div>
           </div>
         </div>
       </div>
@@ -486,33 +605,22 @@ console.warn = function(...args) {
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
 
     modal.querySelector('#accountDeleteBtn').onclick = async () => {
-      if (!confirm('Are you sure? This will permanently delete your account, all capsules, folders, and teams. This cannot be undone.')) return;
-      if (!confirm('LAST WARNING: All your data will be erased forever. Continue?')) return;
+      if (!confirm('This will clear all local capsules, settings, and sign you out of this device. Your cloud account remains intact. Continue?')) return;
 
       const btn = modal.querySelector('#accountDeleteBtn');
-      btn.textContent = 'Deleting...';
+      btn.textContent = 'Clearing...';
       btn.disabled = true;
 
       try {
-        // Try API delete first
-        if (API) {
-          try {
-            await API.request('DELETE', '/api/auth/account');
-          } catch {
-            // API unreachable, continue with local cleanup
-          }
-        }
-        // Clear all local data
         modal.remove();
         if (API) await API.clearAuth();
         await chrome.storage.local.clear();
-        showToast('Account deleted', 'info');
+        showToast('Signed out and local data cleared', 'info');
         showScreen(loginScreen);
       } catch {
-        // Fallback: clear local data
         await chrome.storage.local.clear();
         modal.remove();
-        showToast('Local data cleared. Account deleted.', 'info');
+        showToast('Signed out and local data cleared', 'info');
         showScreen(loginScreen);
       }
     };
@@ -522,6 +630,12 @@ console.warn = function(...args) {
 
   $('#dropdownSync').addEventListener('click', async () => {
     userDropdown.classList.remove('open');
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to sync.', 'info');
+      return;
+    }
     showToast('Syncing…', 'info');
     try {
       chrome.runtime.sendMessage({ type: 'SYNC_TO_SERVER' }, (resp) => {
@@ -581,10 +695,24 @@ console.warn = function(...args) {
     }
   }
 
-  $('#floatingFeedbackBtn')?.addEventListener('click', handleFeedbackClick);
+  $('#floatingFeedbackBtn')?.addEventListener('click', async (e) => {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to submit feedback.', 'info');
+      return;
+    }
+    handleFeedbackClick(e);
+  });
 
   // ---- Quick Actions ----
   $('#qaCapture').addEventListener('click', async () => {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to capture.', 'info');
+      return;
+    }
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab) return;
@@ -631,6 +759,12 @@ console.warn = function(...args) {
   });
 
   $('#qaNewCapsule').addEventListener('click', async () => {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to create capsules.', 'info');
+      return;
+    }
     const title = prompt('Capsule title:');
     if (!title) return;
     const capsule = {

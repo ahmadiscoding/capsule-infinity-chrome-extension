@@ -56,37 +56,18 @@ const CapsuleStorage = {
 
 
   async getCloudTeams(email) {
-    const sb = await this.initSupabase();
-    if (!sb) return [];
-
-    try {
-      // Use the shared client's getUser method
-      const client = (typeof window !== 'undefined' && window.SupabaseClient) ? window.SupabaseClient : ((typeof self !== 'undefined' && self.SupabaseClient) ? self.SupabaseClient : null);
-      const user = client ? await client.getUser() : null;
-      if (!user) return [];
-
-      const { data, error } = await sb
-        .from('teams')
-        .select('*')
-        .contains('user_emails', [email]);
-
-      if (error) {
-        // If table public.teams does not exist in Supabase schema, return empty array quietly
-        if (error.code === 'PGRST204' || error.message?.includes('schema cache') || error.message?.includes('does not exist')) {
-          return [];
-        }
-        throw error;
-      }
-      return data || [];
-    } catch (e) {
-      if (!e.message?.includes('schema cache') && !e.message?.includes('does not exist')) {
-        console.warn('[Storage] Supabase getCloudTeams failed:', e.message || e.details || JSON.stringify(e));
-      }
-      return [];
-    }
+    // Teams remote network calls disabled in v1.0.3 per user decision TEAMS = DISABLE
+    return [];
   },
 
   async getAllCapsules() {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      // Consent not yet accepted: read local cache only, no network calls
+      const res = await chrome.storage.local.get('capsules');
+      return res.capsules || [];
+    }
+
     const sb = await this.initSupabase();
     const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
 
@@ -228,10 +209,11 @@ const CapsuleStorage = {
     capsule.metadata.updatedAt = Date.now();
     capsule.metadata.version = capsule.metadata.version || 1;
 
-    const sb = await this.initSupabase();
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    const sb = consent?.accepted ? await this.initSupabase() : null;
     const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
 
-    if (sb && (stored.authToken || stored.supabaseSession || stored.user)) {
+    if (consent?.accepted && sb && (stored.authToken || stored.supabaseSession || stored.user)) {
       try {
         let userId = null;
         const session = await SupabaseClient.getSession();
@@ -308,11 +290,12 @@ const CapsuleStorage = {
   },
 
   async deleteCapsule(id) {
-    const sb = await this.initSupabase();
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    const sb = consent?.accepted ? await this.initSupabase() : null;
     const stored = await chrome.storage.local.get(['user', 'authToken', 'supabaseSession']);
     const user = stored.user;
 
-    if (sb && (stored.authToken || stored.supabaseSession || user?.id)) {
+    if (consent?.accepted && sb && (stored.authToken || stored.supabaseSession || user?.id)) {
       try {
         const { error } = await sb.from('capsules').delete().eq('id', id);
         if (error) {
@@ -399,6 +382,12 @@ const CapsuleStorage = {
   },
 
   async requestAICompression(rawTranscript) {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      console.warn('[Storage] Blocked: user consent required before AI compression');
+      return { error: 'CONSENT_REQUIRED', message: 'User data notice and consent required before AI processing.' };
+    }
+
     // Cap transcript to 30K chars — longer input causes provider timeouts
     const MAX_TRANSCRIPT_LENGTH = 30000;
     let transcript = rawTranscript || '';

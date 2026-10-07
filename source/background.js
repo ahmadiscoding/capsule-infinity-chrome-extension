@@ -21,6 +21,12 @@ console.warn = function(...args) {
   originalWarn.apply(console, args);
 };
 
+// Consent gate helper
+async function hasUserConsent() {
+  const result = await chrome.storage.local.get('consent');
+  return !!(result.consent && result.consent.accepted);
+}
+
 // Open side panel
 chrome.action.onClicked.addListener((tab) => {
   chrome.sidePanel.open({ tabId: tab.id });
@@ -145,7 +151,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           await chrome.storage.local.set({ user: res.user });
         }
 
-        if (sb && (res.authToken || res.supabaseSession || userId)) {
+        const consented = await hasUserConsent();
+        if (consented && sb && (res.authToken || res.supabaseSession || userId)) {
           try {
             if (userId) {
               const dbObj = {
@@ -198,6 +205,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'TRIGGER_GOOGLE_AUTH': {
       (async () => {
         try {
+          const consented = await hasUserConsent();
+          if (!consented) {
+            console.warn('[Background OAuth] Blocked: user consent required');
+            sendResponse({ error: 'CONSENT_REQUIRED', message: 'User data notice and consent required before signing in.' });
+            return;
+          }
           const res = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'googleClientId']);
           const clientId = res.googleClientId || "328828088778-k9g6656bjtih0mhjckqrqa78gooimu83.apps.googleusercontent.com";
           const redirectUrl = chrome.identity.getRedirectURL(); // e.g. https://<extension-id>.chromiumapp.org/
@@ -359,6 +372,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     case 'SUBMIT_FEEDBACK': {
       (async () => {
         try {
+          const consented = await hasUserConsent();
+          if (!consented) {
+            console.warn('[Background Feedback] Blocked: user consent required');
+            sendResponse({ error: 'CONSENT_REQUIRED', message: 'Consent required before submitting feedback.' });
+            return;
+          }
           const { rating, reason, followUp } = message;
           const sb = await SupabaseClient.ensureInitialized();
           const user = await SupabaseClient.getUser();
@@ -418,21 +437,35 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return false;
     }
 
-    case 'GET_PLATFORM':
-      sendResponse({ platform: detectPlatform(sender.tab?.url) });
-      return false;
-
     case 'SYNC_TO_SERVER':
-      syncToServer().then(sendResponse).catch(e => sendResponse({ error: e.message }));
+      (async () => {
+        if (!await hasUserConsent()) {
+          sendResponse({ error: 'CONSENT_REQUIRED', message: 'Consent required before sync.' });
+          return;
+        }
+        syncToServer().then(sendResponse).catch(e => sendResponse({ error: e.message }));
+      })();
       return true;
 
     case 'SYNC_FROM_SERVER':
-      syncFromServer().then(sendResponse).catch(e => sendResponse({ error: e.message }));
+      (async () => {
+        if (!await hasUserConsent()) {
+          sendResponse({ error: 'CONSENT_REQUIRED', message: 'Consent required before sync.' });
+          return;
+        }
+        syncFromServer().then(sendResponse).catch(e => sendResponse({ error: e.message }));
+      })();
       return true;
 
     case 'REQUEST_CAPSULE_COMPRESSION': {
       (async () => {
         try {
+          const consented = await hasUserConsent();
+          if (!consented) {
+            console.warn('[Background AI Compression] Blocked: user consent required');
+            sendResponse({ error: 'CONSENT_REQUIRED', message: 'User data notice and consent required before AI processing.' });
+            return;
+          }
           console.log('[Background AI Compression] Handler invoked. Getting session...');
           let session = await SupabaseClient.getSession();
           let accessToken = session?.access_token;
@@ -561,6 +594,8 @@ chrome.runtime.onInstalled.addListener(() => {
 function startAutoSync() {
   if (syncIntervalId) clearInterval(syncIntervalId);
   syncIntervalId = setInterval(async () => {
+    const consented = await hasUserConsent();
+    if (!consented) return;
     const result = await chrome.storage.local.get(['settings', 'authToken']);
     if (result.settings?.autoSync && result.authToken) {
       try { await syncToServer(); } catch {}

@@ -89,129 +89,106 @@ console.warn = function(...args) {
     }
   }
 
-  // ---- KVDB Cloud Sharing Helpers ----
-  const KVDB_BUCKET = 'cap_inf_teams_db_938172';
-
+  // ---- KVDB & Teams Remote Sharing Helpers (DISABLED in v1.0.3 per user decision TEAMS = DISABLE) ----
   async function kvdbGet(key) {
-    const settings = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
-    const token = settings.supabaseSession?.access_token;
-    if (settings.supabaseUrl && settings.supabaseKey && token) {
-      try {
-        if (key.startsWith('team_')) {
-          const teamId = key.replace('team_', '');
-          const response = await fetch(`${settings.supabaseUrl}/rest/v1/teams?team_id=eq.${encodeURIComponent(teamId)}`, {
-            headers: {
-              'apikey': settings.supabaseKey,
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            if (data && data.length > 0) {
-              const t = data[0];
-              return {
-                id: t.team_id,
-                name: t.name,
-                description: t.description,
-                inviteCode: t.invite_code,
-                inviteExpiresAt: t.invite_expires_at ? new Date(t.invite_expires_at).getTime() : null,
-                members: typeof t.members === 'string' ? JSON.parse(t.members) : (t.members || []),
-                createdAt: new Date(t.created_at).getTime()
-              };
-            }
-          }
-        } else if (key.startsWith('invite_')) {
-          const inviteCode = key.replace('invite_', '');
-          const response = await fetch(`${settings.supabaseUrl}/rest/v1/teams?invite_code=eq.${encodeURIComponent(inviteCode)}`, {
-            headers: {
-              'apikey': settings.supabaseKey,
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (response.ok) {
-            const data = await response.json();
-            if (data && data.length > 0) {
-              const t = data[0];
-              return {
-                id: t.team_id,
-                name: t.name,
-                description: t.description,
-                inviteCode: t.invite_code,
-                inviteExpiresAt: t.invite_expires_at ? new Date(t.invite_expires_at).getTime() : null,
-                members: typeof t.members === 'string' ? JSON.parse(t.members) : (t.members || []),
-                createdAt: new Date(t.created_at).getTime()
-              };
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[KVDB Supabase Get Error]', err);
-      }
-    }
-
-    try {
-      const resp = await fetch(`https://kvdb.io/bucket/${KVDB_BUCKET}/${key}`);
-      if (!resp.ok) {
-        if (resp.status === 404) return null;
-        throw new Error(`HTTP ${resp.status}`);
-      }
-      const valText = await resp.text();
-      return JSON.parse(valText);
-    } catch (e) {
-      console.log('kvdbGet error:', e);
-      return null;
-    }
+    return null;
   }
 
   async function kvdbSet(key, value) {
-    const settings = await chrome.storage.local.get(['supabaseUrl', 'supabaseKey', 'supabaseSession']);
-    const token = settings.supabaseSession?.access_token;
-    if (settings.supabaseUrl && settings.supabaseKey && token) {
-      try {
-        if (key.startsWith('team_') || key.startsWith('invite_')) {
-          const team = value;
-          const userEmails = (team.members || []).map(m => m.email);
-          const dbObj = {
-            team_id: team.id,
-            name: team.name,
-            description: team.description || '',
-            invite_code: team.inviteCode || '',
-            invite_expires_at: team.inviteExpiresAt ? new Date(team.inviteExpiresAt).toISOString() : null,
-            members: team.members || [],
-            user_emails: userEmails,
-            created_at: team.createdAt ? new Date(team.createdAt).toISOString() : new Date().toISOString()
-          };
+    return false;
+  }
 
-          const headers = {
-            'apikey': settings.supabaseKey,
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'resolution=merge-duplicates'
-          };
-          const response = await fetch(`${settings.supabaseUrl}/rest/v1/teams`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(dbObj)
-          });
-          if (!response.ok) {
-            console.error('[KVDB Supabase Set Error]', await response.text());
-          }
+  // =============================================
+  // DATA NOTICE & CONSENT MODAL
+  // =============================================
+  async function showConsentModal({ forceWithdrawalOption = false } = {}) {
+    const existing = document.getElementById('ci-consent-modal');
+    if (existing) existing.remove();
+
+    const consentRes = await chrome.storage.local.get('consent');
+    const isAccepted = !!(consentRes.consent && consentRes.consent.accepted);
+
+    const modal = document.createElement('div');
+    modal.id = 'ci-consent-modal';
+    modal.className = 'modal-overlay open';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.75);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;';
+
+    const showWithdraw = forceWithdrawalOption || isAccepted;
+
+    modal.innerHTML = `
+      <div style="background:#1d1d25;border:1px solid rgba(255,255,255,0.12);border-radius:14px;width:100%;max-width:360px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 16px 40px rgba(0,0,0,0.6);overflow:hidden;font-family:inherit;color:#ffffff;text-align:left;">
+        <div style="padding:16px 18px 12px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b58ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            <h3 style="font-size:15px;font-weight:600;margin:0;color:#ffffff;letter-spacing:-0.01em;">Data Notice & Consent</h3>
+          </div>
+          <button id="ciConsentCloseTop" style="background:none;border:none;color:#9d9db5;font-size:18px;cursor:pointer;padding:0;line-height:1;">✕</button>
+        </div>
+        <div style="padding:16px 18px;overflow-y:auto;font-size:12px;line-height:1.55;color:#9d9db5;flex:1;">
+          <p style="margin:0 0 12px;color:#e2e8f0;font-size:12px;">
+            Capsule Infinity turns your AI chats into reusable knowledge capsules. Before using capture or cloud features, please review how your data is handled:
+          </p>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:10px;">
+            <div>
+              <strong style="color:#ffffff;display:block;margin-bottom:2px;">• What is sent:</strong>
+              <span>Only the AI conversations you choose to capture, together with the webpage title and source URL.</span>
+            </div>
+            <div>
+              <strong style="color:#ffffff;display:block;margin-bottom:2px;">• Who receives it:</strong>
+              <span>Our backend server and AI service providers (Google Gemini and Groq) process your conversation text under their respective privacy policies and terms to generate structured summaries—even when not signed in. If you sign in, our cloud provider (Supabase) securely syncs your capsules, folders, and profile.</span>
+            </div>
+            <div>
+              <strong style="color:#ffffff;display:block;margin-bottom:2px;">• Your privacy:</strong>
+              <span>We never sell your data and never use it for advertising, tracking, or credit scoring.</span>
+            </div>
+          </div>
+          <p style="margin:0 0 10px;">
+            Read our full <a href="https://github.com/ahmadiscoding/capsule-infinity-chrome-extension/blob/main/PRIVACY_POLICY.md" target="_blank" rel="noopener" style="color:#a78bfa;text-decoration:underline;">Privacy Policy</a>.
+          </p>
+          <p style="margin:0;font-size:11px;color:#71717a;font-style:italic;">
+            Note: Without your agreement, conversation capture, AI summarization, and cloud sign-in remain disabled.
+          </p>
+        </div>
+        <div style="padding:12px 18px;border-top:1px solid rgba(255,255,255,0.08);background:rgba(0,0,0,0.2);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;">
+          ${showWithdraw ? `
+            <button id="ciConsentWithdrawBtn" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.1);color:#fca5a5;font-size:12px;font-weight:600;cursor:pointer;">Withdraw consent</button>
+            <button id="ciConsentCloseBtn" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#ffffff;font-size:12px;font-weight:500;cursor:pointer;">Close</button>
+          ` : `
+            <button id="ciConsentNotNowBtn" style="padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#9d9db5;font-size:12px;font-weight:500;cursor:pointer;">Not now</button>
+            <button id="ciConsentAgreeBtn" style="padding:8px 16px;border-radius:8px;border:none;background:#6b58ff;color:#ffffff;font-size:12px;font-weight:600;cursor:pointer;">I Agree</button>
+          `}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelector('#ciConsentCloseTop').onclick = () => modal.remove();
+
+    if (showWithdraw) {
+      modal.querySelector('#ciConsentCloseBtn').onclick = () => modal.remove();
+      modal.querySelector('#ciConsentWithdrawBtn').onclick = async () => {
+        await chrome.storage.local.remove('consent');
+        modal.remove();
+        showToast('Consent withdrawn. Capture and cloud sync are now disabled.', 'info');
+      };
+    } else {
+      modal.querySelector('#ciConsentNotNowBtn').onclick = () => {
+        modal.remove();
+        showToast('Consent not accepted. Capture and cloud sync remain off.', 'info');
+      };
+      modal.querySelector('#ciConsentAgreeBtn').onclick = async () => {
+        await chrome.storage.local.set({
+          consent: { accepted: true, version: 1, at: Date.now() }
+        });
+        modal.remove();
+        showToast('Notice accepted. All features are enabled.', 'success');
+        if (state.user) {
+          loadAllData();
         }
-      } catch (err) {
-        console.error('[KVDB Supabase Set Error]', err);
-      }
-    }
-
-    try {
-      const resp = await fetch(`https://kvdb.io/bucket/${KVDB_BUCKET}/${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(value)
-      });
-      return resp.ok;
-    } catch (e) {
-      console.log('kvdbSet error:', e);
-      return false;
+      };
     }
   }
 
@@ -243,8 +220,19 @@ console.warn = function(...args) {
   async function init() {
     if (API) await API.configure();
 
-    // Start live OTP expiry countdown timer for teams
-    startOTPTimer();
+    // Check data notice and consent
+    const consentRes = await chrome.storage.local.get('consent');
+    if (!consentRes?.consent?.accepted) {
+      showConsentModal();
+    }
+
+    const linkPrivacy = $('#linkPrivacySidebar');
+    if (linkPrivacy) {
+      linkPrivacy.addEventListener('click', (e) => {
+        e.preventDefault();
+        showConsentModal({ forceWithdrawalOption: true });
+      });
+    }
 
     const result = await chrome.storage.local.get(['authToken', 'user', 'googleAuth']);
     if (result.authToken || result.user) {
@@ -260,6 +248,13 @@ console.warn = function(...args) {
   $('#loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleLogin(); });
 
   async function handleLogin() {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to sign in.', 'info');
+      return;
+    }
+
     const email = $('#loginEmail').value.trim();
     const password = $('#loginPassword').value;
     if (!email || !password) { showLoginError('Please enter email and password'); return; }
@@ -290,6 +285,13 @@ console.warn = function(...args) {
   $('#regPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') handleRegister(); });
 
   async function handleRegister() {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to sign in.', 'info');
+      return;
+    }
+
     const name = $('#regName').value.trim();
     const email = $('#regEmail').value.trim();
     const password = $('#regPassword').value;
@@ -319,6 +321,13 @@ console.warn = function(...args) {
 
   // Universal Google OAuth Flow using background delegation
   async function handleGoogleAuth() {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to sign in.', 'info');
+      return;
+    }
+
     const btn = $('#googleLoginBtn') || $('#googleRegBtn');
     const orgText = btn ? btn.textContent : 'Sign in with Google';
     if (btn) {
@@ -462,40 +471,8 @@ console.warn = function(...args) {
 
   async function loadTeams() {
     try {
-      const settings = await chrome.storage.local.get(['supabaseUrl', 'user']);
-      let loadedTeams = [];
-      
-      if (settings.user?.email) {
-        // Query the cloud teams on load
-        loadedTeams = await Storage.getCloudTeams(settings.user.email);
-      } else {
-        const result = await chrome.storage.local.get('teams');
-        loadedTeams = result.teams || [];
-      }
-      
-      state.teams = Array.isArray(loadedTeams) ? loadedTeams : [];
-      await chrome.storage.local.set({ teams: state.teams });
-
-      // Sync each team's members and OTP from KVDB in the background
-      for (const t of state.teams) {
-        kvdbGet(`team_${t.id}`).then(async (latestTeam) => {
-          if (latestTeam) {
-            t.members = latestTeam.members || t.members || [];
-            t.inviteCode = latestTeam.inviteCode || t.inviteCode || '';
-            t.inviteExpiresAt = latestTeam.inviteExpiresAt || t.inviteExpiresAt || 0;
-            
-            // Save updated team back to storage
-            const res = await chrome.storage.local.get('teams');
-            const lts = res.teams || [];
-            const idx = lts.findIndex(x => x.id === t.id);
-            if (idx >= 0) {
-              lts[idx] = t;
-              await chrome.storage.local.set({ teams: lts });
-            }
-            renderTeams();
-          }
-        }).catch(err => console.log('Background sync error for team:', t.id, err));
-      }
+      const result = await chrome.storage.local.get('teams');
+      state.teams = Array.isArray(result.teams) ? result.teams : [];
     } catch (e) {
       console.error('[Teams Sidebar] loadTeams failed:', e);
       state.teams = [];
@@ -1076,7 +1053,15 @@ console.warn = function(...args) {
     setTimeout(() => $('#capsuleEditTitle').focus(), 100);
   }
 
-  $('#fabNew').addEventListener('click', () => openCapsuleModal());
+  $('#fabNew').addEventListener('click', async () => {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to create capsules.', 'info');
+      return;
+    }
+    openCapsuleModal();
+  });
 
   $('#capsuleModalClose').addEventListener('click', () => $('#capsuleModal').classList.remove('open'));
   $('#capsuleModalCancel').addEventListener('click', () => $('#capsuleModal').classList.remove('open'));
@@ -1660,6 +1645,13 @@ console.warn = function(...args) {
 
   // Submit Sidebar Rating
   $('#sidebarFeedbackSubmit')?.addEventListener('click', async () => {
+    const consent = (await chrome.storage.local.get('consent'))?.consent;
+    if (!consent?.accepted) {
+      showConsentModal();
+      showToast('Please accept the data notice to submit feedback.', 'info');
+      return;
+    }
+
     if (sidebarSelectedRating === 0) {
       showToast('Please select a star rating', 'info');
       return;
@@ -1715,28 +1707,17 @@ console.warn = function(...args) {
   });
 
   $('#btnDeleteAccountSidebar').addEventListener('click', async () => {
-    if (!confirm('Are you sure? This will permanently delete your account, all capsules, folders, and teams. This cannot be undone.')) return;
-    if (!confirm('LAST WARNING: All your data will be erased forever. Continue?')) return;
+    if (!confirm('This will clear all local capsules, settings, and sign you out of this device. Your cloud account remains intact. Continue?')) return;
 
-    showToast('Deleting account...', 'info');
+    showToast('Clearing local data...', 'info');
     try {
-      // Try API delete first
-      if (API) {
-        try {
-          await API.request('DELETE', '/api/auth/account');
-        } catch {
-          // API unreachable, continue with local cleanup
-        }
-      }
-      // Clear all local data
       if (API) await API.clearAuth();
       await chrome.storage.local.clear();
-      showToast('Account deleted', 'success');
+      showToast('Signed out and local data cleared', 'success');
       setTimeout(() => location.reload(), 500);
     } catch {
-      // Fallback: clear local data
       await chrome.storage.local.clear();
-      showToast('Local data cleared', 'success');
+      showToast('Signed out and local data cleared', 'success');
       setTimeout(() => location.reload(), 500);
     }
   });
