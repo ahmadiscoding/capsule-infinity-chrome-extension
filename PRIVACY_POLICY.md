@@ -96,7 +96,7 @@ Capsule Infinity shares data only with the third-party infrastructure and servic
   Your conversation text is processed by these providers under their own applicable terms and privacy policies. Because capsule compression relies on these AI providers, capturing a conversation transmits the transcript to our backend server and these AI providers **regardless of whether you are signed into an account or using the extension anonymously**.
 * **Google Identity Services**: Facilitates secure OAuth authentication when you choose to sign in, transmitting authentication tokens to verify your identity. ([Google Privacy Policy](https://policies.google.com/privacy))
 * **Email Client / Gmail**: If you choose to share a team invite via email, the extension opens a standard Gmail compose window (`mail.google.com`) in your browser with draft text pre-filled. The extension does not access, read, or send emails on your behalf; sending is controlled entirely by you.
-* **Teams Feature**: In this version of the extension, the Teams collaboration feature is disabled. No team data, member emails, or invite codes are sent to external key-value databases, Supabase, or any external servers.
+* **Teams Feature**: In this version of the extension, the Teams collaboration feature is displayed as "Coming Soon" and is completely disabled. No team data, member emails, or invite codes are collected, processed, or sent to external key-value databases, Supabase, or any external servers.
 * **Legal Requirements**: We may disclose information if required to do so by law, subpoena, or valid legal process.
 
 ---

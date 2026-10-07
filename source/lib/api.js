@@ -213,111 +213,24 @@ const CapsuleAPI = {
     return this.request('DELETE', `/api/folders/${id}`);
   },
 
-  // ---- Teams ----
+  // ---- Teams (Disabled in v1.0.3 per user decision TEAMS = DISABLE) ----
   async getTeams() {
-    try {
-      const sb = await this.getSupabaseClient();
-      if (sb) {
-        const { data: { user }, error: userError } = await sb.auth.getUser();
-        if (userError) throw userError;
-        if (user && user.email) {
-          const { data, error } = await sb.from('teams').select('*').contains('user_emails', [user.email]);
-          if (!error) return data || [];
-        }
-      }
-    } catch (err) {
-      console.error('[API getTeams] failed:', err);
-    }
     return [];
   },
 
   async createTeam(name, description) {
-    try {
-      const sb = await this.getSupabaseClient();
-      if (sb) {
-        const { data: { user }, error: userError } = await sb.auth.getUser();
-        if (userError) throw userError;
-        if (user && user.email) {
-          const id = 'team_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
-          const inviteCode = Math.floor(100000 + Math.random() * 900000).toString();
-          const dbObj = {
-            team_id: id,
-            name,
-            description: description || '',
-            invite_code: inviteCode,
-            invite_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-            members: [{ email: user.email, role: 'owner' }],
-            user_emails: [user.email],
-            created_at: new Date().toISOString()
-          };
-          const { data, error } = await sb.from('teams').insert(dbObj).select();
-          if (!error) return data?.[0] || dbObj;
-        }
-      }
-    } catch (err) {
-      console.error('[API createTeam] failed:', err);
-    }
     return null;
   },
 
   async inviteToTeam(teamId, email, role) {
-    try {
-      const sb = await this.getSupabaseClient();
-      if (sb) {
-        const { data: teamData, error: fetchErr } = await sb.from('teams').select('*').eq('team_id', teamId).single();
-        if (!fetchErr && teamData) {
-          const members = teamData.members || [];
-          if (!members.some(m => m.email === email)) {
-            members.push({ email, role: role || 'member' });
-          }
-          const user_emails = members.map(m => m.email);
-          const { error: updateErr } = await sb.from('teams').update({ members, user_emails }).eq('team_id', teamId);
-          if (!updateErr) return true;
-        }
-      }
-    } catch (err) {
-      console.error('[API inviteToTeam] failed:', err);
-    }
     return false;
   },
 
   async joinTeam(inviteCode) {
-    try {
-      const sb = await this.getSupabaseClient();
-      if (sb) {
-        const { data: { user }, error: userError } = await sb.auth.getUser();
-        if (userError) throw userError;
-        if (user && user.email) {
-          const { data: teamData, error: fetchErr } = await sb.from('teams').select('*').eq('invite_code', inviteCode).single();
-          if (!fetchErr && teamData) {
-            const members = teamData.members || [];
-            if (!members.some(m => m.email === user.email)) {
-              members.push({ email: user.email, role: 'member' });
-            }
-            const user_emails = members.map(m => m.email);
-            const { error: updateErr } = await sb.from('teams').update({ members, user_emails }).eq('invite_code', inviteCode);
-            if (!updateErr) return teamData;
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[API joinTeam] failed:', err);
-    }
     return null;
   },
 
   async getTeamMembers(teamId) {
-    try {
-      const sb = await this.getSupabaseClient();
-      if (sb) {
-        const { data, error } = await sb.from('teams').select('members').eq('team_id', teamId).single();
-        if (!error && data) {
-          return data.members || [];
-        }
-      }
-    } catch (err) {
-      console.error('[API getTeamMembers] failed:', err);
-    }
     return [];
   },
 
